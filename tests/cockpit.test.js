@@ -89,7 +89,7 @@ test('messages for ready, crash and result, with touch wording', () => {
 });
 
 // @spec COCKPIT-DRAW-005
-test('Sun badge sits on the left edge, in line with the planet, at the start', () => {
+test('Star badge sits on the left edge, in line with the planet, at the start', () => {
   const W = 1600, H = 1000, r = 22;
   const { cx, cy } = view.sunBadgePosition(Math.PI, W, H, r, false);
   close(cx, r * 1.9, 1e-9);

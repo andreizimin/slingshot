@@ -2,6 +2,7 @@
 import * as sim from '../sim/physics.js';
 import * as view from './view.js';
 import { track } from './analytics.js';
+import * as tours from './tour.js';
 
 const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');
@@ -33,8 +34,13 @@ let plan = null;      // planned state while paused (burns applied, not yet comm
 let drag = null;     // { id, x0, y0, x, y } while a pointer is pressed on the canvas
 const DRAG_DEADZONE = view.DRAG_DEADZONE;
 let feedbackOpen = false; // while the feedback form is open, game input is ignored
+let tour = null;          // getting-started tour state (see tour.js), null when not touring
+let camX = 0;             // camera centre relative to the planet, km (0,0 = planet-centred)
+let camY = 0;
+const CLOSE_UP_SCALE = 300; // km per px for the tour's opening close-up on the ship
 let prevStatus = 'flying';
 const COARSE = window.matchMedia('(pointer: coarse)').matches;
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let W = 0;
 let H = 0;
@@ -71,12 +77,30 @@ function resize() {
 
 // @spec COCKPIT-CAM-002, COCKPIT-CAM-005
 function targetScale() {
+  const step = tours.current(tour);
+  if (step?.zoom === 'close') return CLOSE_UP_SCALE;
   return view.targetScale(sim.planetRelativePosition(state), W, H);
+}
+
+// Where the camera wants to look: the ship during the tour's close-up, otherwise the planet.
+// @spec TOUR-007
+function targetCamera() {
+  const step = tours.current(tour);
+  if (step?.focus === 'ship') {
+    const r = sim.planetRelativePosition(state);
+    return [r.x, r.y];
+  }
+  return [0, 0];
 }
 
 // @spec COCKPIT-CAM-001
 function toScreen(rx, ry) {
-  return [W / 2 + rx / scale, H / 2 - ry / scale];
+  return [W / 2 + (rx - camX) / scale, H / 2 - (ry - camY) / scale];
+}
+
+// The planet's centre on screen (the screen centre unless the camera is looking elsewhere).
+function planetScreen() {
+  return toScreen(0, 0);
 }
 
 // ---------- input ----------
@@ -84,6 +108,8 @@ function toScreen(rx, ry) {
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
 
 function setSetting(next) {
+  // @spec TOUR-006 — during the tour, play starts only once the tour gets to "Fly!".
+  if (next !== 'paused' && !tours.inputAllowed(tours.current(tour), 'time')) return;
   if (next === 'paused') {
     if (setting !== 'paused') resumeTo = setting;
     setting = 'paused';
@@ -108,10 +134,25 @@ function togglePause() {
 // @spec COCKPIT-CTL-001, COCKPIT-CTL-002, COCKPIT-CTL-003, COCKPIT-CTL-004, COCKPIT-CTL-006
 window.addEventListener('keydown', (e) => {
   if (feedbackOpen) return; // @spec FEED-002 — typing in the feedback form never steers the ship
+  const step = tours.current(tour);
+  // @spec TOUR-012 — → and ← step through the tour (they never steer: only ↑ ↓ do).
+  if (step && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    e.preventDefault();
+    if (e.repeat) return;
+    if (e.key === 'ArrowRight') pressTourButton();
+    else if (tours.canGoBack(tour) && !tourEl.card.hidden) tour = tours.prev(tour);
+    return;
+  }
   const dir = ARROWS[e.key];
   if (dir) {
     e.preventDefault();
     if (!held.includes(dir)) held.push(dir);
+    return;
+  }
+  // @spec TOUR-006 — Enter presses the tour card's button; Space does too on Next steps.
+  if (step && (e.key === 'Enter' || (e.key === ' ' && step.advance === 'tap'))) {
+    e.preventDefault();
+    if (!e.repeat) pressTourButton();
     return;
   }
   if (e.key === ' ') {
@@ -121,7 +162,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '2') setSetting('slow');
   else if (e.key === '3') setSetting('normal');
   else if (e.key === '4') setSetting('fast');
-  else if (e.key === 'r' || e.key === 'R') reset();
+  else if (e.key === 'r' || e.key === 'R') resetKey();
 });
 
 window.addEventListener('keyup', (e) => {
@@ -213,19 +254,19 @@ function arrow(x1, y1, x2, y2, color, width) {
   ctx.stroke();
 }
 
-// Sun badge: an arrow-shaped bubble with a little sun inside, parked under the fuel bar
-// (clear of the flight area), pointing toward the Sun from the planet.
+// Star badge: an arrow-shaped bubble with a little star (sun-like) inside, on the screen edge
+// along the planet→star line, pointing toward the star.
 // @spec COCKPIT-DRAW-005
 function drawStarArrow() {
   const narrow = W < 600;
   const p = sim.planetPosition(state.t);
-  const a = Math.atan2(p.y, -p.x); // screen angle toward the Sun (world origin), y flipped
+  const a = Math.atan2(p.y, -p.x); // screen angle toward the star (world origin), y flipped
   const r = narrow ? 18 : 22;
   const { cx, cy } = view.sunBadgePosition(a, W, H, r, narrow);
 
   ctx.save();
   ctx.translate(cx, cy);
-  // Bubble with a pointed tip toward the Sun.
+  // Bubble with a pointed tip toward the star.
   ctx.rotate(a);
   ctx.fillStyle = 'rgba(22, 33, 63, 0.95)';
   ctx.strokeStyle = '#fbbf24';
@@ -257,7 +298,7 @@ function drawStarArrow() {
   ctx.fillStyle = '#fcd34d';
   ctx.font = `700 ${narrow ? 12 : 13}px Nunito, system-ui, sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText('Sun', cx, cy + r + 16);
+  ctx.fillText('Star', cx, cy + r + 16);
   ctx.textAlign = 'left';
 }
 
@@ -283,8 +324,9 @@ function pill(text, x, y, color, align = 'left') {
 // shift vanishes; close in, the curve swells smoothly into an elliptical swing.
 function pathPoint(rx, ry) {
   const [x, y] = toScreen(rx, ry);
-  const [dx, dy] = view.radialRemap(x - W / 2, y - H / 2, sim.PLANET_RADIUS / scale, planetDrawRadius() + 6);
-  return [W / 2 + dx, H / 2 + dy];
+  const [px, py] = planetScreen();
+  const [dx, dy] = view.radialRemap(x - px, y - py, sim.PLANET_RADIUS / scale, planetDrawRadius() + 6);
+  return [px + dx, py + dy];
 }
 
 // @spec COCKPIT-DRAW-006
@@ -305,12 +347,15 @@ function drawTrail() {
 
 // The prediction is a planning tool: shown only while paused.
 // @spec COCKPIT-PRED-002
-function drawPrediction() {
+function drawPrediction(now = 0) {
   if (!view.showPrediction(setting)) return;
   if (!prediction || prediction.points.length === 0) return;
-  ctx.strokeStyle = '#22d3ee';
+  // @spec COCKPIT-PRED-003 — dashes march along the path in the direction of travel, with a soft pulse.
+  const t = REDUCED_MOTION ? 0 : now / 1000;
+  ctx.strokeStyle = `rgba(34, 211, 238, ${REDUCED_MOTION ? 1 : 0.75 + 0.25 * Math.sin(t * 4)})`;
   ctx.lineWidth = 3;
   ctx.setLineDash([10, 9]);
+  ctx.lineDashOffset = -(t * 38) % 19; // negative offset moves dashes forward along the drawn path
   ctx.beginPath();
   const r = sim.planetRelativePosition(state);
   ctx.moveTo(...shipScreenPos(r));
@@ -319,6 +364,7 @@ function drawPrediction() {
   }
   ctx.stroke();
   ctx.setLineDash([]);
+  ctx.lineDashOffset = 0;
 }
 
 function planetDrawRadius() {
@@ -328,8 +374,7 @@ function planetDrawRadius() {
 // @spec COCKPIT-DRAW-002
 function drawPlanet() {
   const R = planetDrawRadius();
-  const cx = W / 2;
-  const cy = H / 2;
+  const [cx, cy] = planetScreen();
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -473,6 +518,10 @@ function drawSpeedArrows() {
     const [lx, ly, d] = labelAt;
     pill(`${Math.abs(value).toFixed(1)} km/s sideways${planDv !== 0 ? ' (planned)' : ''}`,
       lx + sx * d * 14, ly + sy * d * 14, '#fdba74', 'center');
+  } else if (tours.current(tour)?.id === 'arrows') {
+    // The tour explains the sideways arrow before there is any sideways speed: show where it lives.
+    arrow(x, y - SHIP_CLEAR_PX * 0.6, x, y - SIDE_MIN_PX, 'rgba(251, 146, 60, 0.6)', 4);
+    pill('0.0 km/s sideways: yours to change', x, y - SIDE_MIN_PX - 18, '#fdba74', 'center');
   }
 }
 
@@ -517,13 +566,166 @@ function updateMessage() {
     change: sim.speedChange(state),
     fuelFraction: state.fuel / sim.FUEL_DV,
   });
-  const html = msg ? msg.html : null;
+  // While touring, the tour card does the talking.
+  const html = msg && !tour ? msg.html : null;
   if (html === null) {
     el.message.hidden = true;
   } else {
     if (el.message.innerHTML !== html) el.message.innerHTML = html;
     el.message.hidden = false;
   }
+}
+
+// ---------- getting-started tour ----------
+
+const tourEl = {
+  card: document.getElementById('tour-card'),
+  count: document.getElementById('tour-count'),
+  title: document.getElementById('tour-title'),
+  text: document.getElementById('tour-text'),
+  button: document.getElementById('tour-next'),
+  skip: document.getElementById('tour-skip'),
+  back: document.getElementById('tour-back'),
+  replay: document.getElementById('tour-replay'),
+};
+const HUD_TARGETS = ['hud-speed', 'hud-fuel', 'hud-time'];
+
+// @spec TOUR-002
+function startTour(auto) {
+  reset();
+  tour = tours.start();
+  track('tour_start', { auto: auto ? 1 : 0 });
+}
+
+function endTour(how) {
+  const step = tours.current(tour);
+  tour = null;
+  tours.markDone(window.localStorage);
+  if (how === 'skip') track('tour_skip', { step: step ? tours.stepIndex(step.id) + 1 : 0 });
+  else track('tour_complete', { change: Math.round(sim.speedChange(state) * 10) / 10 });
+  for (const id of HUD_TARGETS) document.getElementById(id)?.classList.remove('tour-target');
+  tourEl.card.hidden = true;
+}
+
+function tourContext() {
+  return {
+    planDv: (plan ?? state).planDv,
+    predictionEnding: prediction?.ending,
+    setting,
+    status: state.status,
+    change: sim.speedChange(state),
+  };
+}
+
+// @spec TOUR-003, TOUR-005
+function pressTourButton() {
+  const card = tours.cardFor(tour, tourContext());
+  if (!card || !card.canAdvance || tourEl.card.hidden) return;
+  if (card.action === 'retry') { reset(); tour = tours.afterCrash(); return; }
+  if (card.action === 'finish') { endTour('complete'); return; }
+  if (card.action === 'resume') { tour = tours.next(tour); setSetting(resumeTo); return; }
+  tour = tours.next(tour);
+}
+
+// R: a plain restart outside the tour; on the tour, "Try again" after a crash, finish after a
+// departure, and nothing mid-flight or on the teaching steps.
+// @spec TOUR-006
+function resetKey() {
+  const action = tours.resetAction(tours.current(tour), tourContext());
+  if (action === 'restart') reset();
+  else if (action === 'retry') { reset(); tour = tours.afterCrash(); }
+  else if (action === 'finish') { endTour('complete'); reset(); }
+}
+
+tourEl.button.addEventListener('click', () => { pressTourButton(); tourEl.button.blur(); });
+tourEl.skip.addEventListener('click', () => { endTour('skip'); tourEl.skip.blur(); });
+tourEl.back.addEventListener('click', () => { tour = tours.prev(tour); tourEl.back.blur(); });
+// @spec TOUR-002 — the ? button replays the tour from the start.
+tourEl.replay.addEventListener('click', () => { startTour(false); tourEl.replay.blur(); });
+
+// @spec TOUR-004, TOUR-008
+function updateTourCard() {
+  const step = tours.current(tour);
+  for (const id of HUD_TARGETS) {
+    document.getElementById(id)?.classList.toggle('tour-target', !!step && step.target === id && tours.cardVisible(step, tourContext()));
+  }
+  if (!step) { tourEl.card.hidden = true; return; }
+  const ctxNow = tourContext();
+  const visible = tours.cardVisible(step, ctxNow);
+  tourEl.card.hidden = !visible;
+  if (!visible) return;
+  const card = tours.cardFor(tour, ctxNow);
+  tourEl.count.textContent = `${card.n} / ${card.of}`;
+  tourEl.title.textContent = card.title;
+  tourEl.text.textContent = card.text;
+  tourEl.button.hidden = !card.button;
+  if (card.button) tourEl.button.textContent = card.button;
+  tourEl.button.disabled = !card.canAdvance;
+  tourEl.back.hidden = !tours.canGoBack(tour);
+  tourEl.card.dataset.anchor = HUD_TARGETS.includes(step.target) ? step.target : 'world';
+  if (tourEl.card.dataset.anchor === 'world') placeCardNearWorld(step);
+  else { tourEl.card.style.left = ''; tourEl.card.style.top = ''; }
+}
+
+// Place the card beside the highlighted world thing, kept on screen (desktop; phones dock it).
+function placeCardNearWorld(step) {
+  if (W < 600) { tourEl.card.style.left = ''; tourEl.card.style.top = ''; return; }
+  const [tx, ty] = step.target === 'planet' ? planetScreen() : shipScreenPos(sim.planetRelativePosition(state));
+  const cw = tourEl.card.offsetWidth || 340;
+  const chh = tourEl.card.offsetHeight || 160;
+  let x = tx + 60;
+  if (x + cw > W - 20) x = tx - 60 - cw;
+  let y = ty - chh - 40;
+  if (y < 170) y = ty + 50;
+  x = Math.max(20, Math.min(W - cw - 20, x));
+  y = Math.max(20, Math.min(H - chh - 110, y));
+  tourEl.card.style.left = `${x}px`;
+  tourEl.card.style.top = `${y}px`;
+}
+
+// Pulsing ring around the highlighted world thing.
+// @spec TOUR-008
+function drawTourHighlight(now) {
+  const step = tours.current(tour);
+  if (!step || !tours.cardVisible(step, tourContext())) return;
+  let x, y, r;
+  if (step.target === 'planet') { [x, y] = planetScreen(); r = planetDrawRadius() + 16; }
+  else if (step.target === 'ship' || step.target === 'arrows') {
+    [x, y] = shipScreenPos(sim.planetRelativePosition(state));
+    r = step.target === 'arrows' ? 70 : 30;
+  } else return;
+  const pulse = REDUCED_MOTION ? 1 : 0.5 + 0.5 * Math.sin(now / 260);
+  ctx.save();
+  ctx.strokeStyle = `rgba(253, 224, 71, ${0.45 + 0.4 * pulse})`;
+  ctx.lineWidth = 3;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.arc(x, y, r + 4 * pulse, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Story-only destination marker at the right edge, for the tour's opening steps.
+// @spec TOUR-009
+function drawDestination() {
+  const step = tours.current(tour);
+  if (!step?.destination) return;
+  const x = W - 24;
+  const y = H / 2;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(167, 243, 208, 0.8)';
+  ctx.setLineDash([5, 6]);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - 130, y);
+  ctx.lineTo(x - 10, y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  arrow(x - 40, y, x - 4, y, 'rgba(167, 243, 208, 0.95)', 3);
+  ctx.textAlign = 'right';
+  pill('Destination: far away', x - 6, y - 22, '#a7f3d0', 'right');
+  ctx.textAlign = 'left';
+  ctx.restore();
 }
 
 // ---------- loop ----------
@@ -533,7 +735,8 @@ function frame(now) {
   const elapsed = lastTime === null ? 0 : (now - lastTime) / 1000;
   lastTime = now;
 
-  const dir = held.length ? held[held.length - 1] : dragDir();
+  const wanted = held.length ? held[held.length - 1] : dragDir();
+  const dir = tours.inputAllowed(tours.current(tour), 'push') ? wanted : null;
   const r = sim.stepsForFrame(setting, elapsed, carry);
   carry = r.carry;
   thrustedThisFrame = false;
@@ -564,22 +767,47 @@ function frame(now) {
   })) track(ev.name, ev.data);
   prevStatus = state.status;
 
+  // @spec TOUR-003 — steps that move on by themselves (pressing play on "Fly!").
+  const step = tours.current(tour);
+  if (step && tours.autoAdvances(step) && tours.conditionMet(step, tourContext())) tour = tours.next(tour);
+  // @spec TOUR-011 — mid-swing checkpoint: pause just after the closest point to the planet.
+  if (step?.id === 'swing') {
+    const rel = sim.planetRelativePosition(state);
+    if (state.status !== 'flying') {
+      tour = { ...tour, index: tours.stepIndex('result') };
+    } else if (tours.swingCheckpointDue(tour, { distance: Math.hypot(rel.x, rel.y), closest: state.closest })) {
+      tour = { ...tour, swingShown: true };
+      setSetting('paused');
+    }
+  }
+
   scale += (targetScale() - scale) * 0.15;
+  const [cx, cy] = targetCamera();
+  camX += (cx - camX) * 0.12;
+  camY += (cy - camY) * 0.12;
 
   drawBackground();
   drawStarArrow();
   drawTrail();
-  drawPrediction();
+  drawPrediction(now);
   drawPlanet();
   drawShip();
   drawSpeedArrows();
+  drawDestination();
+  drawTourHighlight(now);
   drawDragHint();
   updateHud();
   updateMessage();
+  updateTourCard();
 
   requestAnimationFrame(frame);
 }
 
 resize();
 reset();
+// @spec TOUR-002 — first visit: the tour starts by itself.
+if (tours.shouldAutoStart(window.localStorage)) startTour(true);
+camX = targetCamera()[0];
+camY = targetCamera()[1];
+scale = targetScale();
 requestAnimationFrame(frame);

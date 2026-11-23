@@ -9,3 +9,5 @@ Design: `analytics-design.md` · Prefix: `ANA`
 - [x] **ANA-005**: Analytics events shall carry counts and categories only: no player-entered text, no identifiers, and nothing from the feedback form.
 
 **Verification.** All five specs are covered by `tests/cockpit.test.js` (ANA-001 page tag, ANA-002 launch payload, ANA-003 end-of-flight events, ANA-004 tracker guard, ANA-005 payload contents).
+
+- [x] **ANA-006**: The tour shall send its events through the same `track` function with the `slingshot_` prefix (see TOUR-010).

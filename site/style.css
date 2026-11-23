@@ -55,6 +55,45 @@ body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit
 .tuner input { width: 100%; accent-color: #22d3ee; }
 .tuner output { text-align: right; font-variant-numeric: tabular-nums; color: #67e8f9; }
 
+/* ---------- getting-started tour ---------- */
+.tour-card {
+  position: fixed; z-index: 5; width: 340px; box-sizing: border-box; padding: 16px 18px 16px;
+  background: rgba(22, 33, 63, 0.97); border: 2px solid #fcd34d; border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); color: #f1f5f9;
+  animation: tour-pop 220ms ease-out;
+}
+.tour-card[hidden] { display: none; }
+@keyframes tour-pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.tour-card[data-anchor="hud-speed"] { left: 50%; top: 200px; margin-left: -170px; }
+.tour-card[data-anchor="hud-fuel"] { left: 32px; top: 104px; }
+.tour-card[data-anchor="hud-time"] { left: 50%; bottom: 112px; margin-left: -170px; }
+.tour-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.tour-count { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: #fcd34d; }
+.tour-skip { background: none; border: none; color: #94a3b8; font: 700 13px Nunito, system-ui, sans-serif; cursor: pointer; padding: 6px 4px; min-height: 32px; }
+.tour-skip:hover { color: #e2e8f0; }
+.tour-title { margin: 2px 0 6px; font-size: 22px; font-weight: 800; color: #fff; }
+.tour-text { margin: 0 0 14px; font-size: 16px; line-height: 1.45; color: #e2e8f0; }
+.tour-next {
+  height: 44px; padding: 0 22px; border-radius: 22px; border: none; background: #fcd34d; color: #0b1530;
+  font: 800 16px Nunito, system-ui, sans-serif; cursor: pointer;
+}
+.tour-next[hidden], .tour-back[hidden] { display: none; }
+.tour-actions { display: flex; gap: 10px; align-items: center; }
+.tour-back {
+  height: 44px; padding: 0 18px; border-radius: 22px; border: 2px solid #475569; background: transparent; color: #e2e8f0;
+  font: 700 16px Nunito, system-ui, sans-serif; cursor: pointer;
+}
+.tour-back:hover { border-color: #94a3b8; }
+.tour-next:disabled { background: #475569; color: #cbd5e1; cursor: default; }
+.hud.tour-target { border-radius: 14px; outline: 3px solid #fcd34d; outline-offset: 8px; animation: tour-glow 1.1s ease-in-out infinite alternate; }
+@keyframes tour-glow { from { box-shadow: 0 0 10px 4px rgba(252, 211, 77, 0.25); } to { box-shadow: 0 0 28px 10px rgba(252, 211, 77, 0.5); } }
+.tour-replay {
+  position: fixed; right: 20px; top: 24px; width: 40px; height: 40px; border-radius: 20px; z-index: 3;
+  border: 2px solid #334155; background: #16213f; color: #fcd34d; font: 800 20px Nunito, system-ui, sans-serif; cursor: pointer;
+}
+.help { right: 76px; }
+@media (prefers-reduced-motion: reduce) { .tour-card, .hud.tour-target { animation: none; } }
+
 /* @spec COCKPIT-MOB-003 */
 @media (max-width: 600px) {
   .speed { top: 16px; }
@@ -66,6 +105,11 @@ body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit
   .bar { height: 14px; }
   .help { display: none; }
   .tuner-toggle { right: 12px; bottom: 76px; width: 40px; height: 40px; }
+  /* Phones: the tour card docks above the time buttons, full width. */
+  .tour-card, .tour-card[data-anchor] { left: 12px !important; right: 12px; top: auto !important; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); width: auto; margin-left: 0; padding: 14px 16px; }
+  .tour-title { font-size: 19px; }
+  .tour-text { font-size: 15px; margin-bottom: 10px; }
+  .tour-replay { right: 12px; top: 16px; width: 36px; height: 36px; font-size: 18px; }
   .tuner { right: 12px; left: 12px; width: auto; bottom: 124px; }
   .time { bottom: max(16px, env(safe-area-inset-bottom)); gap: 6px; }
   .time button { height: 44px; padding: 0 10px; gap: 5px; font-size: 14px; border-radius: 22px; }
