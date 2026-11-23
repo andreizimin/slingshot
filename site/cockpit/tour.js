@@ -1,12 +1,11 @@
 // Getting-started tour: a guided walk through the real game. Pure data and rules, no DOM,
 // so it runs under node --test. main.js moves the camera, shows the cards and feeds events in.
 
-export const TOUR_DONE_KEY = 'slingshot.tourDone';
 
 // focus: where the camera looks ('ship' or 'planet'); zoom: 'close' for the opening close-up.
 // target: what is highlighted: a world thing ('ship', 'planet', 'arrows') or a HUD element id.
-// advance: 'tap' (Next), 'planBehind' (a plan that passes behind the planet), 'running' (play pressed),
-// 'end' (the flight's result; Done finishes the tour).
+// advance: 'tap' (Next), 'planSide' (a plan that clears the planet on either side), 'running'
+// (play pressed), 'resume' (the mid-swing checkpoint), 'end' (the flight's result).
 // @spec TOUR-001
 export const STEPS = [
   {
@@ -17,7 +16,7 @@ export const STEPS = [
   {
     id: 'planet', focus: 'planet', target: 'planet', advance: 'tap', destination: true,
     title: 'Borrow speed from the planet',
-    text: 'The planet races around its star at 13 km/s. Swing close behind it and its gravity drags you along, lending you speed for free.',
+    text: 'The planet races around its star at 13 km/s. Swing close behind it and its gravity drags you along, lending you speed for free. Pass in front of it, and it slows you down instead.',
   },
   {
     id: 'speed', focus: 'planet', target: 'hud-speed', advance: 'tap',
@@ -40,10 +39,10 @@ export const STEPS = [
     text: 'While the game is paused, drag up or down (or press ↑ ↓) to plan your course. The dashed line shows exactly where you will go. Planning is free.',
   },
   {
-    id: 'try', focus: 'planet', target: 'ship', advance: 'planBehind',
-    title: 'Your turn',
-    text: 'Drag down until the dashed line swings around BEHIND the planet.',
-    waiting: 'Keep going: the line has to pass behind the planet (the side it is moving away from).',
+    id: 'try', focus: 'planet', target: 'ship', advance: 'planSide',
+    title: 'Your turn: pick a side',
+    text: 'Drag DOWN to swing BEHIND the planet (that speeds you up), or UP to pass in FRONT of it (that slows you down). Stop when the dashed line clears the planet.',
+    waiting: 'Keep going: that path still hits the planet. Drag a little further.',
   },
   {
     id: 'fly', focus: 'planet', target: 'hud-time', advance: 'running',
@@ -54,6 +53,7 @@ export const STEPS = [
     id: 'swing', focus: 'planet', target: 'arrows', advance: 'resume',
     title: 'How the slingshot works',
     text: "The planet's gravity pulls you toward it. That pull is what bends your path around it. But the planet is moving, so as you swing around behind it, its pull drags you along with it, like being flung by a spinning carousel. That is where your extra speed comes from.",
+    textFront: "The planet's gravity pulls you toward it. That pull is what bends your path around it. But the planet is moving, and you are crossing in FRONT of it, so its pull tugs you backwards, against your motion. This side of the planet slows you down.",
   },
   {
     id: 'result', focus: 'planet', target: 'hud-speed', advance: 'end',
@@ -64,18 +64,9 @@ export const STEPS = [
 
 export const stepIndex = (id) => STEPS.findIndex((s) => s.id === id);
 
+// The tutorial is the game's front door: it always starts, the same way, on every load.
 // @spec TOUR-002
-export function shouldAutoStart(storage) {
-  try {
-    return storage?.getItem(TOUR_DONE_KEY) !== '1';
-  } catch {
-    return true;
-  }
-}
-
-export function markDone(storage) {
-  try { storage?.setItem(TOUR_DONE_KEY, '1'); } catch { /* private mode: replay next visit */ }
-}
+export const startsOnLoad = () => true;
 
 export const start = () => ({ active: true, index: 0 });
 export const current = (tour) => (tour?.active ? STEPS[tour.index] : null);
@@ -85,7 +76,7 @@ export const current = (tour) => (tour?.active ? STEPS[tour.index] : null);
 export function conditionMet(step, ctx) {
   switch (step.advance) {
     case 'tap': return true;
-    case 'planBehind': return ctx.planDv < 0 && ctx.predictionEnding === 'departed';
+    case 'planSide': return ctx.planDv !== 0 && ctx.predictionEnding === 'departed';
     case 'running': return ctx.setting !== 'paused';
     case 'end': return ctx.status === 'departed';
     default: return false;
@@ -101,6 +92,10 @@ export function swingCheckpointDue(tour, ctx) {
   if (!step || step.id !== 'swing' || tour.swingShown) return false;
   return ctx.closest < SWING_MAX_CLOSEST && ctx.distance > ctx.closest * 1.0001;
 }
+
+// Which side of the planet a plan takes: pushing down (negative) passes behind, up passes in front.
+// @spec TOUR-014
+export const sideOf = (planDv) => (planDv < 0 ? 'behind' : planDv > 0 ? 'front' : null);
 
 // Steps that move on by themselves as soon as their condition holds (no Next press).
 export const autoAdvances = (step) => step.advance === 'running';
@@ -146,7 +141,8 @@ export function cardFor(tour, ctx) {
   const of = STEPS.length;
   if (step.id === 'swing') {
     if (tour.swingShown) {
-      return { n, of, title: step.title, text: step.text, button: 'Keep flying', canAdvance: true, action: 'resume' };
+      const text = tour.side === 'front' ? step.textFront : step.text;
+      return { n, of, title: step.title, text, button: 'Keep flying', canAdvance: true, action: 'resume' };
     }
     return {
       n, of, title: 'Paused',
@@ -166,29 +162,42 @@ export function cardFor(tour, ctx) {
     if (ctx.status === 'crashed') {
       return {
         n, of, title: 'Bonk! Too close',
-        text: 'You flew into the planet. Plan a slightly wider swing behind it: drag down a little more.',
+        text: 'You flew into the planet. Plan a slightly wider swing: drag a little further.',
         button: 'Try again', canAdvance: true, action: 'retry',
       };
     }
     const change = ctx.change ?? 0;
-    const gained = change > 0.05;
+    if (change > 0.05) {
+      return {
+        n, of, title: 'Boost!',
+        text: `Passing BEHIND the planet sped you up by ${signedKms(change)}, almost for free. Passing in front would have slowed you down. You know how slingshots work now.`,
+        button: "I'm ready", canAdvance: true, action: 'ready',
+        secondary: 'Try the other side', secondaryAction: 'other',
+      };
+    }
+    if (change < -0.05) {
+      return {
+        n, of, title: 'Brake!',
+        text: `Passing in FRONT of the planet slowed you down by ${signedKms(Math.abs(change)).slice(1)}. This side slows you down, which is handy for arriving at a planet without overshooting it. Passing behind speeds you up.`,
+        button: "I'm ready", canAdvance: true, action: 'ready',
+        secondary: 'Try the other side', secondaryAction: 'other',
+      };
+    }
     return {
-      n, of,
-      title: gained ? 'Boost!' : 'Not quite',
-      text: gained
-        ? `The planet lent you ${signedKms(change)}, almost for free. Passing in FRONT of it slows you down instead. Try that next!`
-        : `Your speed changed by ${signedKms(change)}. Passing behind the planet gives a boost. Press R and try a swing behind it.`,
-      button: 'Done', canAdvance: true, action: 'finish',
+      n, of, title: 'Not much changed',
+      text: `Your speed changed by only ${signedKms(change)}. Swing closer to the planet: behind it to speed up, in front of it to slow down.`,
+      button: 'Try again', canAdvance: true, action: 'retry',
     };
   }
   const ok = conditionMet(step, ctx);
   let text = step.text;
   if (step.id === 'try' && tour.crashed) text = `Too close! ${text} A little wider this time.`;
-  if (step.id === 'try' && !ok && ctx.planDv < 0) text = step.waiting;
+  if (step.id === 'try' && tour.otherSide) text = `Now try the other side! ${text}`;
+  if (step.id === 'try' && !ok && ctx.planDv !== 0) text = step.waiting;
   return {
     n, of, title: step.title, text,
-    button: step.advance === 'tap' || step.advance === 'planBehind' ? 'Next' : null,
-    canAdvance: step.advance === 'tap' || (step.advance === 'planBehind' && ok),
+    button: step.advance === 'tap' || step.advance === 'planSide' ? 'Next' : null,
+    canAdvance: step.advance === 'tap' || (step.advance === 'planSide' && ok),
     action: 'next',
   };
 }
@@ -211,6 +220,6 @@ export function resetAction(step, ctx) {
   if (!step) return 'restart';
   if (step.id !== 'result') return null;
   if (ctx.status === 'crashed') return 'retry';
-  if (ctx.status === 'departed') return 'finish';
+  if (ctx.status === 'departed') return Math.abs(ctx.change) > 0.05 ? 'ready' : 'retry';
   return null;
 }

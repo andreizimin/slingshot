@@ -6,10 +6,6 @@ import * as sim from '../site/sim/physics.js';
 
 const html = readFileSync(new URL('../site/index.html', import.meta.url), 'utf8');
 const paused = { planDv: 0, predictionEnding: 'crashed', setting: 'paused', status: 'flying', change: 0 };
-const memStorage = () => {
-  const m = new Map();
-  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) };
-};
 const at = (id, extra = {}) => ({ active: true, index: tour.stepIndex(id), ...extra });
 
 // @spec TOUR-001
@@ -28,33 +24,33 @@ test('the tour has the ten storyboard steps in order, opening on a close-up of t
 });
 
 // @spec TOUR-002
-test('auto-starts on the first visit only, and survives storage that throws', () => {
-  const store = memStorage();
-  assert.equal(tour.shouldAutoStart(store), true);
-  tour.markDone(store);
-  assert.equal(tour.shouldAutoStart(store), false);
-  const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
-  assert.equal(tour.shouldAutoStart(broken), true);
-  assert.doesNotThrow(() => tour.markDone(broken));
+test('the tutorial starts on every load, and a ? button replays it', () => {
+  assert.equal(tour.startsOnLoad(), true);
   assert.match(html, /id="tour-replay"[^>]*aria-label="How to play"/, 'a ? button replays the tour');
 });
 
-// @spec TOUR-003
-test('Next moves through tap steps; "Your turn" waits for a plan that passes behind the planet', () => {
+// @spec TOUR-003, TOUR-014
+test('Next moves through tap steps; "Your turn" accepts a plan that clears the planet on either side', () => {
   let t = tour.start();
   for (let i = 0; i < tour.stepIndex('try'); i++) {
     assert.equal(tour.cardFor(t, paused).canAdvance, true);
     t = tour.next(t);
   }
   assert.equal(tour.current(t).id, 'try');
+  assert.match(tour.cardFor(t, paused).text, /BEHIND/);
+  assert.match(tour.cardFor(t, paused).text, /FRONT/);
   assert.equal(tour.cardFor(t, paused).canAdvance, false, 'no plan yet');
-  assert.equal(tour.cardFor(t, { ...paused, planDv: 1, predictionEnding: 'departed' }).canAdvance, false, 'in front does not count');
-  const waiting = tour.cardFor(t, { ...paused, planDv: -0.2, predictionEnding: 'crashed' });
-  assert.equal(waiting.canAdvance, false);
-  assert.match(waiting.text, /behind/);
-  const ok = tour.cardFor(t, { ...paused, planDv: -2, predictionEnding: 'departed' });
-  assert.equal(ok.canAdvance, true);
-  assert.equal(ok.button, 'Next');
+  const hits = tour.cardFor(t, { ...paused, planDv: -0.2, predictionEnding: 'crashed' });
+  assert.equal(hits.canAdvance, false);
+  assert.match(hits.text, /still hits the planet/);
+  const behind = tour.cardFor(t, { ...paused, planDv: -2, predictionEnding: 'departed' });
+  assert.equal(behind.canAdvance, true);
+  assert.equal(behind.button, 'Next');
+  const front = tour.cardFor(t, { ...paused, planDv: 2, predictionEnding: 'departed' });
+  assert.equal(front.canAdvance, true, 'in front counts too');
+  assert.equal(tour.sideOf(-1), 'behind');
+  assert.equal(tour.sideOf(1), 'front');
+  assert.equal(tour.sideOf(0), null);
 });
 
 // @spec TOUR-003
@@ -88,16 +84,35 @@ test('cards show while paused; the result card waits for the flight to end', () 
   assert.match(html, /id="tour-skip"/, 'skippable');
 });
 
-// @spec TOUR-001
-test('the result card names the boost, and a weak result points back to passing behind', () => {
+// @spec TOUR-001, TOUR-014
+test('result cards: Boost behind, Brake in front (it says this side slows you), both lead to I\'m ready', () => {
   const boost = tour.cardFor(at('result'), { ...paused, status: 'departed', change: 7.62 });
   assert.equal(boost.title, 'Boost!');
+  assert.match(boost.text, /BEHIND/);
   assert.match(boost.text, /\+7\.6 km\/s/);
-  assert.match(boost.text, /FRONT/);
-  assert.equal(boost.action, 'finish');
-  const weak = tour.cardFor(at('result'), { ...paused, status: 'departed', change: -1 });
-  assert.equal(weak.title, 'Not quite');
-  assert.match(weak.text, /behind/);
+  assert.equal(boost.action, 'ready');
+  assert.equal(boost.button, "I'm ready");
+  assert.equal(boost.secondary, 'Try the other side');
+  const brake = tour.cardFor(at('result'), { ...paused, status: 'departed', change: -3.14 });
+  assert.equal(brake.title, 'Brake!');
+  assert.match(brake.text, /FRONT/);
+  assert.match(brake.text, /slows you down/);
+  assert.match(brake.text, /3\.1 km\/s/);
+  assert.equal(brake.action, 'ready');
+  assert.equal(brake.secondary, 'Try the other side');
+  const flat = tour.cardFor(at('result'), { ...paused, status: 'departed', change: 0.01 });
+  assert.equal(flat.button, 'Try again');
+  assert.equal(flat.action, 'retry');
+});
+
+// @spec TOUR-014
+test('the mid-swing checkpoint explains the side that was flown', () => {
+  const swing = at('swing', { swingShown: true });
+  assert.match(tour.cardFor({ ...swing, side: 'behind' }, { ...paused, status: 'flying' }).text, /behind it, its pull drags you along/);
+  const front = tour.cardFor({ ...swing, side: 'front' }, { ...paused, status: 'flying' }).text;
+  assert.match(front, /FRONT/);
+  assert.match(front, /slows you down/);
+  assert.match(tour.cardFor(at('try', { otherSide: true }), paused).text, /Now try the other side/);
 });
 
 // @spec TOUR-005
@@ -130,7 +145,9 @@ test('R restarts normally, but on the tour only acts once a result card is up', 
   assert.equal(tour.resetAction(step('plan'), paused), null, 'teaching steps ignore R');
   assert.equal(tour.resetAction(step('result'), { ...paused, setting: 'normal', status: 'flying' }), null, 'mid-flight: nothing');
   assert.equal(tour.resetAction(step('result'), { ...paused, status: 'crashed' }), 'retry');
-  assert.equal(tour.resetAction(step('result'), { ...paused, status: 'departed' }), 'finish');
+  assert.equal(tour.resetAction(step('result'), { ...paused, status: 'departed', change: 5 }), 'ready');
+  assert.equal(tour.resetAction(step('result'), { ...paused, status: 'departed', change: -1 }), 'ready', 'a brake also completes it');
+  assert.equal(tour.resetAction(step('result'), { ...paused, status: 'departed', change: 0 }), 'retry');
 });
 
 // @spec TOUR-004
@@ -145,11 +162,16 @@ test('pausing mid-way through the tour flight shows how to carry on', () => {
 });
 
 // @spec TOUR-003
-test('the tour\'s "Your turn" is achievable in the real physics: a downward plan passes behind and departs', () => {
-  let s = sim.planningBurn(sim.initialState(), 'down', 3);
-  const pred = sim.predict(s);
-  assert.equal(pred.ending, 'departed');
-  assert.equal(tour.cardFor(at('try'), { ...paused, planDv: s.planDv, predictionEnding: pred.ending }).canAdvance, true);
+test('the tour\'s "Your turn" is achievable in the real physics on both sides, with boost and brake results', () => {
+  for (const [dir, sign] of [['down', 1], ['up', -1]]) {
+    let s = sim.planningBurn(sim.initialState(), dir, 3);
+    const pred = sim.predict(s);
+    assert.equal(pred.ending, 'departed', `${dir}: plan clears the planet`);
+    assert.equal(tour.cardFor(at('try'), { ...paused, planDv: s.planDv, predictionEnding: pred.ending }).canAdvance, true);
+    for (let i = 0; i < 80000 && s.status === 'flying'; i++) s = sim.step(s, null);
+    assert.equal(s.status, 'departed');
+    assert.ok(sign * sim.speedChange(s) > 0.05, `${dir}: ${sign > 0 ? 'boost' : 'brake'} (${sim.speedChange(s)})`);
+  }
 });
 
 // @spec TOUR-011
@@ -196,4 +218,9 @@ test('Back goes one step back on every step up to "Fly!", never during or after 
   assert.equal(tour.canGoBack(at('result')), false);
   assert.deepEqual(tour.prev(at('result')), at('result'), 'no-op when not allowed');
   assert.match(html, /id="tour-back"[^>]*hidden/, 'Back button on the card, hidden until usable');
+});
+
+// @spec TOUR-013
+test('free flight follows the tutorial, with a "coming soon" note on the page', () => {
+  assert.match(html, /id="free-note"[^>]*hidden[^>]*>Free flight · full game coming soon</);
 });
