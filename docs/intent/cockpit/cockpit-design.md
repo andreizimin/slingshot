@@ -87,9 +87,9 @@ Each `requestAnimationFrame`:
 3. If steps ran: `{ state, samples } = advance(state, steps, push)`, append `samples` to the trail, and recompute the prediction from the state. If paused with a push held: apply it to the planned state and recompute the prediction from the plan.
 4. Send any analytics event for a status change (`flightEvents`).
 5. Update the camera scale.
-6. Draw background, Sun badge, trail, the prediction line (only while paused), planet, planet-motion arrow, ship (flame sized by throttle), speed arrows, drag hint, then readouts and any message.
+6. Draw background, Star badge, trail, the prediction line (only while paused), planet, planet-motion arrow, ship (flame sized by throttle), speed arrows, drag hint, then readouts and any message.
 
-The decisions in steps 4 to 6 (scale, path bend, drag direction, fuel bar, messages, Sun badge, prediction visibility, analytics events) are pure functions in `site/cockpit/view.js`, unit-tested in `tests/cockpit.test.js`; `main.js` only wires input and draws.
+The decisions in steps 4 to 6 (scale, path bend, drag direction, fuel bar, messages, Star badge, prediction visibility, analytics events) are pure functions in `site/cockpit/view.js`, unit-tested in `tests/cockpit.test.js`; `main.js` only wires input and draws.
 
 ## Visual Style
 

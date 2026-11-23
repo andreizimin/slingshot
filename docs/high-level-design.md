@@ -77,7 +77,8 @@ flowchart LR
 |---|---|---|
 | Flight sim | Bodies, gravity, symplectic integrator, fixed-step time advance, thrust and fuel, prediction line, speed in the star's and planet's frames. No DOM. | `docs/intent/flight-sim/` |
 | Cockpit | Canvas rendering with storybook proportions, keyboard, mouse and touch controls, speed readout and arrows, fuel display, time controls. Drives the sim each animation frame. Its decisions live in a pure, tested module (`view.js`). | `docs/intent/cockpit/` |
-| Analytics | Shared Umami tag and three cookieless flight events. | `docs/intent/analytics/` |
+| Getting-started tour | First-visit guided walk over the frozen game: camera moves, caption cards, then the player plans and flies a first boost. Replay from the ? button. | `docs/intent/tour/` |
+| Analytics | Shared Umami tag and cookieless flight and tour events. | `docs/intent/analytics/` |
 | Feedback | Shared feedback widget, and keeping game keys out of its form. | `docs/intent/feedback/` |
 | Hosting | Static deploy of the site to the subdomain, and CI. | `docs/intent/hosting/` |
 

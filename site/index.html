@@ -13,18 +13,18 @@
 <body>
   <canvas id="view" aria-label="Ship, planet and predicted path"></canvas>
 
-  <div class="hud speed">
+  <div id="hud-speed" class="hud speed">
     <span class="label">Your speed</span>
     <span class="value"><span id="speed">0.0</span> <span class="unit">km/s</span></span>
     <span id="change" class="change flat">▲ +0.0</span>
   </div>
 
-  <div class="hud fuel">
+  <div id="hud-fuel" class="hud fuel">
     <span class="label">Fuel</span>
     <div class="bar"><div id="fuel-planned" class="planned"></div><div id="fuel-fill" class="fill"></div></div>
   </div>
 
-  <div class="hud time">
+  <div id="hud-time" class="hud time">
     <button type="button" data-setting="paused">
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 3v12M13 3v12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>Pause
     </button>
@@ -42,6 +42,23 @@
   <div id="help" class="hud help">↑ ↓ or drag up/down: steer sideways · Space: pause · 1–4: pause/slow/normal/fast · R: restart</div>
 
   <div id="message" class="message" hidden></div>
+
+  <!-- @spec TOUR-004: getting-started tour caption card -->
+  <section id="tour-card" class="tour-card" role="dialog" aria-live="polite" aria-labelledby="tour-title" hidden>
+    <div class="tour-head">
+      <span id="tour-count" class="tour-count"></span>
+      <button id="tour-skip" type="button" class="tour-skip">Skip tour</button>
+    </div>
+    <h2 id="tour-title" class="tour-title"></h2>
+    <p id="tour-text" class="tour-text"></p>
+    <div class="tour-actions">
+      <button id="tour-back" type="button" class="tour-back" hidden>Back</button>
+      <button id="tour-next" type="button" class="tour-next">Next</button>
+    </div>
+  </section>
+
+  <!-- @spec TOUR-002: replay the getting-started tour -->
+  <button id="tour-replay" type="button" class="tour-replay" aria-label="How to play">?</button>
 
   <button id="tuner-toggle" type="button" class="tuner-toggle" hidden aria-label="Tune speeds">
     <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="13.5" cy="5" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7.5" cy="10" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="11.5" cy="15" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/></svg>

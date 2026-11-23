@@ -90,9 +90,9 @@ export function messageFor({ status, ready, coarse, change, fuelFraction }) {
   return null;
 }
 
-// Where the Sun badge sits: on the screen edge along the ray from the planet (screen centre)
-// toward the Sun, inset from the sides and kept between the top and bottom HUD bands.
-// angle = screen angle toward the Sun (radians, screen y down).
+// Where the Star badge sits: on the screen edge along the ray from the planet (screen centre)
+// toward the star, inset from the sides and kept between the top and bottom HUD bands.
+// angle = screen angle toward the star (radians, screen y down).
 // @spec COCKPIT-DRAW-005
 export function sunBadgePosition(angle, W, H, r, narrow) {
   const inset = r * 1.9;
