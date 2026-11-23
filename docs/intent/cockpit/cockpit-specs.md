@@ -2,7 +2,7 @@
 
 Design: `cockpit-design.md` · Prefix: `COCKPIT`
 
-Cockpit specs are verified by hands-on play-testing; they have no automated tests yet.
+**Verification.** Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `tests/cockpit.test.js` (CAM-002, CAM-005, DRAW-002, DRAW-005, DRAW-010, CTL-009, HUD-002, HUD-003, HUD-007, MSG-001 to 003, MOB-002, PRED-002, TUNE-001). The rest describe canvas drawing, browser input wiring and CSS layout in `main.js` and `style.css`, which need a real browser; they are verified by hands-on play-testing on desktop and phone before each deploy.
 
 ## Camera and drawing
 
@@ -22,7 +22,7 @@ Cockpit specs are verified by hands-on play-testing; they have no automated test
 - [x] **COCKPIT-DRAW-005**: The cockpit shall draw a yellow arrow pointing screen-up from beside the planet with the label "planet moving this way", and a Sun badge: an arrow-shaped bubble with a small sun inside, its tip pointing toward the Sun, labelled "Sun", placed on the screen edge where the line from the planet toward the Sun meets it (behind the ship at the start), kept clear of the top and bottom HUD bands.
 - [x] **COCKPIT-DRAW-009**: The cockpit shall draw the dashed planned sideways arrow only while paused with a plan; while running it shall show only actual speeds, and it shall omit the sideways arrow and label when the sideways speed is under 0.05 km/s.
 - [x] **COCKPIT-DRAW-010**: When drawing the trail or the prediction line, the cockpit shall draw each point at screen distance √(d² + K²) from the planet centre on its true bearing, where d is its true screen distance and K² = (drawn planet radius + 6 px)² − (true planet radius in px)² (zero when not inflated), so paths bend smoothly around the drawn planet instead of crossing it or hugging its edge; the sim state is unchanged.
-- [x] **COCKPIT-TUNE-001**: The cockpit shall offer a speed tuner, opened from a round button at the bottom right, with sliders for the Slow, Normal and Fast steps-per-second values that apply immediately and display the current value.
+- [x] **COCKPIT-TUNE-001**: Where the page URL contains `?tune`, the cockpit shall offer a speed tuner (hidden otherwise), opened from a round button at the bottom right, with sliders for the Slow, Normal and Fast steps-per-second values that apply immediately and display the current value.
 - [x] **COCKPIT-DRAW-006**: The cockpit shall draw the prediction as a dashed cyan line and the trail as a faint solid white line, on a navy background with a fixed sparse starfield.
 
 ## Trail and prediction

@@ -1,5 +1,7 @@
 // Cockpit: draws the flight sim and turns input into commands. Presentation only.
 import * as sim from '../sim/physics.js';
+import * as view from './view.js';
+import { track } from './analytics.js';
 
 const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');
@@ -29,7 +31,9 @@ let thrustDirThisFrame = null;
 const held = [];      // arrow stack, most recent last
 let plan = null;      // planned state while paused (burns applied, not yet committed)
 let drag = null;     // { id, x0, y0, x, y } while a pointer is pressed on the canvas
-const DRAG_DEADZONE = 24;
+const DRAG_DEADZONE = view.DRAG_DEADZONE;
+let feedbackOpen = false; // while the feedback form is open, game input is ignored
+let prevStatus = 'flying';
 const COARSE = window.matchMedia('(pointer: coarse)').matches;
 
 let W = 0;
@@ -48,6 +52,7 @@ function reset() {
   setting = 'paused';
   ready = true;
   carry = 0;
+  prevStatus = state.status;
   scale = targetScale();
   updateButtons();
 }
@@ -66,16 +71,7 @@ function resize() {
 
 // @spec COCKPIT-CAM-002, COCKPIT-CAM-005
 function targetScale() {
-  const r = sim.planetRelativePosition(state);
-  const d = Math.hypot(r.x, r.y);
-  const m = Math.min(W, H) || 800;
-  let s = Math.min(20000, Math.max(1000, d / (0.35 * m)));
-  // Keep the ship inside the area clear of the HUD.
-  const availUp = Math.max(40, H / 2 - 170);
-  const availDown = Math.max(40, H / 2 - 110);
-  const availX = Math.max(40, W / 2 - (W < 600 ? 60 : 110));
-  s = Math.max(s, Math.abs(r.x) / availX, r.y > 0 ? r.y / availUp : -r.y / availDown);
-  return s;
+  return view.targetScale(sim.planetRelativePosition(state), W, H);
 }
 
 // @spec COCKPIT-CAM-001
@@ -94,6 +90,8 @@ function setSetting(next) {
   } else {
     // @spec COCKPIT-CTL-011 — resuming commits the planned course and charges its fuel.
     if (plan) { state = plan; plan = null; }
+    // @spec ANA-002 — a flight is launched when play starts from the ready state.
+    if (ready) { const ev = view.launchEvent(state.planDv); track(ev.name, ev.data); }
     setting = next;
     resumeTo = next;
     ready = false;
@@ -109,6 +107,7 @@ function togglePause() {
 
 // @spec COCKPIT-CTL-001, COCKPIT-CTL-002, COCKPIT-CTL-003, COCKPIT-CTL-004, COCKPIT-CTL-006
 window.addEventListener('keydown', (e) => {
+  if (feedbackOpen) return; // @spec FEED-002 — typing in the feedback form never steers the ship
   const dir = ARROWS[e.key];
   if (dir) {
     e.preventDefault();
@@ -134,6 +133,10 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('blur', () => { held.length = 0; drag = null; });
 
+// @spec FEED-002 — the shared feedback widget announces when its form opens and closes.
+window.addEventListener('feedback:open', () => { feedbackOpen = true; held.length = 0; drag = null; });
+window.addEventListener('feedback:close', () => { feedbackOpen = false; });
+
 // @spec COCKPIT-CTL-009, COCKPIT-CTL-010 — drag to push, one path for touch, mouse and pen.
 canvas.addEventListener('pointerdown', (e) => {
   if (drag) return;
@@ -153,11 +156,7 @@ canvas.addEventListener('lostpointercapture', endDrag);
 
 function dragDir() {
   if (!drag) return null;
-  const dx = drag.x - drag.x0;
-  const dy = drag.y - drag.y0;
-  // Only sideways pushes exist, so only the vertical part of a drag counts.
-  if (Math.abs(dy) <= DRAG_DEADZONE) return null;
-  return dy < 0 ? 'up' : 'down';
+  return view.dragDirection(drag.x - drag.x0, drag.y - drag.y0);
 }
 
 // @spec COCKPIT-DRAW-007
@@ -222,18 +221,7 @@ function drawStarArrow() {
   const p = sim.planetPosition(state.t);
   const a = Math.atan2(p.y, -p.x); // screen angle toward the Sun (world origin), y flipped
   const r = narrow ? 18 : 22;
-  // Park the badge on the screen edge along the planet→Sun line (behind the ship at the start),
-  // kept clear of the HUD bands at top and bottom.
-  const inset = r * 1.9;
-  const top = narrow ? 150 : 190;
-  const bottom = H - (narrow ? 100 : 120);
-  const ux = Math.cos(a);
-  const uy = Math.sin(a);
-  const tx = ux < 0 ? (inset - W / 2) / ux : ux > 0 ? (W - inset - W / 2) / ux : Infinity;
-  const ty = uy < 0 ? (top - H / 2) / uy : uy > 0 ? (bottom - H / 2) / uy : Infinity;
-  const t = Math.min(tx, ty);
-  const cx = W / 2 + ux * t;
-  const cy = H / 2 + uy * t;
+  const { cx, cy } = view.sunBadgePosition(a, W, H, r, narrow);
 
   ctx.save();
   ctx.translate(cx, cy);
@@ -295,15 +283,8 @@ function pill(text, x, y, color, align = 'left') {
 // shift vanishes; close in, the curve swells smoothly into an elliptical swing.
 function pathPoint(rx, ry) {
   const [x, y] = toScreen(rx, ry);
-  const trueR = sim.PLANET_RADIUS / scale;
-  const drawR = planetDrawRadius() + 6;
-  const K2 = Math.max(0, drawR * drawR - trueR * trueR);
-  const dx = x - W / 2;
-  const dy = y - H / 2;
-  const d = Math.hypot(dx, dy);
-  if (d === 0 || K2 === 0) return [x, y];
-  const k = Math.sqrt(d * d + K2) / d;
-  return [W / 2 + dx * k, H / 2 + dy * k];
+  const [dx, dy] = view.radialRemap(x - W / 2, y - H / 2, sim.PLANET_RADIUS / scale, planetDrawRadius() + 6);
+  return [W / 2 + dx, H / 2 + dy];
 }
 
 // @spec COCKPIT-DRAW-006
@@ -325,7 +306,7 @@ function drawTrail() {
 // The prediction is a planning tool: shown only while paused.
 // @spec COCKPIT-PRED-002
 function drawPrediction() {
-  if (setting !== 'paused') return;
+  if (!view.showPrediction(setting)) return;
   if (!prediction || prediction.points.length === 0) return;
   ctx.strokeStyle = '#22d3ee';
   ctx.lineWidth = 3;
@@ -341,7 +322,7 @@ function drawPrediction() {
 }
 
 function planetDrawRadius() {
-  return Math.max(sim.PLANET_RADIUS / scale, 24);
+  return view.planetDrawRadius(sim.PLANET_RADIUS, scale);
 }
 
 // @spec COCKPIT-DRAW-002
@@ -500,6 +481,8 @@ function drawSpeedArrows() {
 (function speedTuner() {
   const panel = document.getElementById('tuner');
   const toggle = document.getElementById('tuner-toggle');
+  if (!view.tunerEnabled(window.location.search)) return; // hidden unless ?tune
+  toggle.hidden = false;
   toggle.addEventListener('click', () => { panel.hidden = !panel.hidden; toggle.blur(); });
   for (const name of ['slow', 'normal', 'fast']) {
     const input = document.getElementById(`tune-${name}`);
@@ -513,42 +496,28 @@ function drawSpeedArrows() {
   }
 })();
 
-const fmt = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}`;
-
-// @spec COCKPIT-HUD-001, COCKPIT-HUD-002, COCKPIT-HUD-003, COCKPIT-HUD-006
+// @spec COCKPIT-HUD-001, COCKPIT-HUD-002, COCKPIT-HUD-003, COCKPIT-HUD-006, COCKPIT-HUD-007
 function updateHud() {
   el.speed.textContent = sim.starFrameSpeed(state).toFixed(1);
-  const c = sim.speedChange(state);
-  el.change.className = `change ${c > 0.05 ? 'up' : c < -0.05 ? 'down' : 'flat'}`;
-  el.change.textContent = `${c < 0 ? '▼' : '▲'} ${fmt(c)}`;
-  // @spec COCKPIT-HUD-007 — solid = fuel left after the plan; faded = fuel the plan will spend.
-  const f = state.fuel / sim.FUEL_DV;
-  const queued = Math.abs((plan ?? state).planDv);
-  const after = Math.max(0, state.fuel - queued) / sim.FUEL_DV;
-  el.fuel.style.width = `${(after * 100).toFixed(1)}%`;
-  el.planned.style.width = `${(f * 100).toFixed(1)}%`;
-  el.fuel.classList.toggle('low', after < 0.2);
+  const ch = view.changeReadout(sim.speedChange(state));
+  el.change.className = `change ${ch.tone}`;
+  el.change.textContent = ch.text;
+  const bar = view.fuelBar(state.fuel, (plan ?? state).planDv, sim.FUEL_DV);
+  el.fuel.style.width = `${(bar.solid * 100).toFixed(1)}%`;
+  el.planned.style.width = `${(bar.striped * 100).toFixed(1)}%`;
+  el.fuel.classList.toggle('low', bar.low);
 }
 
 // @spec COCKPIT-MSG-001, COCKPIT-MSG-002, COCKPIT-MSG-003
 function updateMessage() {
-  let html = null;
-  if (state.status === 'crashed') {
-    html = '<span class="big">Bonk!</span>You hit the planet. Press R to try again.';
-  } else if (state.status === 'departed') {
-    const c = sim.speedChange(state);
-    const fuel = Math.round((state.fuel / sim.FUEL_DV) * 100);
-    const head = c > 0.05
-      ? `<span class="big up">Boost! ${fmt(c)} km/s</span>`
-      : c < -0.05
-        ? `<span class="big down">Brake! ${fmt(c)} km/s</span>`
-        : '<span class="big">No change</span>';
-    html = `${head}Fuel left: ${fuel}%<br>Press R to fly again.`;
-  } else if (ready) {
-    html = COARSE
-      ? 'Drag up or down to pick a side, then tap Normal to go.'
-      : 'Push up or down (arrows or drag) to pick a side, then press Space to go.';
-  }
+  const msg = view.messageFor({
+    status: state.status,
+    ready,
+    coarse: COARSE,
+    change: sim.speedChange(state),
+    fuelFraction: state.fuel / sim.FUEL_DV,
+  });
+  const html = msg ? msg.html : null;
   if (html === null) {
     el.message.hidden = true;
   } else {
@@ -587,6 +556,13 @@ function frame(now) {
       prediction = sim.predict(plan);
     }
   }
+
+  // @spec ANA-003 — report how a flight ended, once, when the status changes.
+  for (const ev of view.flightEvents(prevStatus, state.status, {
+    change: sim.speedChange(state),
+    fuelFraction: state.fuel / sim.FUEL_DV,
+  })) track(ev.name, ev.data);
+  prevStatus = state.status;
 
   scale += (targetScale() - scale) * 0.15;
 

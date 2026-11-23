@@ -49,7 +49,7 @@ body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit
   background: rgba(22, 33, 63, 0.96); border: 2px solid #334155; display: flex; flex-direction: column; gap: 10px;
   font-size: 14px; font-weight: 700; color: #e2e8f0;
 }
-.tuner[hidden] { display: none; }
+.tuner[hidden], .tuner-toggle[hidden] { display: none; }
 .tuner-title { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; }
 .tuner label { display: grid; grid-template-columns: 56px 1fr 44px; align-items: center; gap: 8px; }
 .tuner input { width: 100%; accent-color: #22d3ee; }

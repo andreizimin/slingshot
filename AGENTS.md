@@ -2,6 +2,11 @@
 
 Browser game for kids aged 7–12 that teaches gravity assists by making them the movement system. Concept brief: `docs/slingshot-context.md`.
 
+- Live: https://slingshot.andreizimin.com
+- Work tracking: Linear project **Slingshot** in team ZZF (Zizify-team). One ticket per change, worked on a branch named from the ticket.
+- Run locally: `npm run dev` (http://localhost:5173). Tests: `npm test` (also run by CI on every push). Deploy: `npm run deploy` (tests first, then SST to production), only after a local review.
+- Developer-only speed tuner: open the game with `?tune` in the URL.
+
 ## LID
 - Mode: Full
 - Version: 1.3.0
