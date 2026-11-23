@@ -1,0 +1,37 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1530; }
+body { font-family: Nunito, system-ui, sans-serif; color: #f1f5f9; }
+canvas { position: fixed; inset: 0; display: block; }
+
+.hud { position: fixed; pointer-events: none; }
+.label { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #cbd5e1; }
+
+.speed { left: 0; right: 0; top: 28px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.speed .value { font-size: 64px; font-weight: 800; line-height: 1; color: #fff; }
+.speed .unit { font-size: 28px; font-weight: 700; color: #cbd5e1; }
+.change { font-size: 26px; font-weight: 800; }
+.change.up { color: #4ade80; }
+.change.down { color: #f87171; }
+.change.flat { color: #94a3b8; }
+
+.fuel { left: 32px; top: 36px; width: 220px; display: flex; flex-direction: column; gap: 8px; }
+.bar { height: 18px; border-radius: 9px; background: #1e2a4a; border: 2px solid #334155; overflow: hidden; }
+.fill { height: 100%; width: 100%; background: #38bdf8; border-radius: 9px; }
+.fill.low { background: #ef4444; }
+
+.time { left: 0; right: 0; bottom: 32px; display: flex; justify-content: center; gap: 12px; pointer-events: auto; width: fit-content; margin: 0 auto; }
+.time button {
+  display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px; border-radius: 26px;
+  border: 2px solid #334155; background: #16213f; color: #e2e8f0; font: 700 17px Nunito, system-ui, sans-serif; cursor: pointer;
+}
+.time button.active { border-color: #22d3ee; background: #22d3ee; color: #0b1530; font-weight: 800; }
+
+.help { right: 32px; top: 40px; max-width: 260px; text-align: right; font-size: 14px; line-height: 1.5; color: #cbd5e1; }
+
+.message {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, 90px); pointer-events: none;
+  background: rgba(22, 33, 63, 0.92); border: 2px solid #334155; border-radius: 20px;
+  padding: 18px 28px; text-align: center; font-size: 22px; font-weight: 700; line-height: 1.4; max-width: 520px;
+}
+.message .big { display: block; font-size: 40px; font-weight: 800; }
+.message .up { color: #4ade80; }
+.message .down { color: #f87171; }
