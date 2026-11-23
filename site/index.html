@@ -7,6 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap">
   <link rel="stylesheet" href="style.css">
+  <!-- @spec ANA-001: shared andreizimin.com Umami website, split by hostname. Cookieless. -->
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="743c516f-8c6d-4584-9f2a-72a062108294"></script>
 </head>
 <body>
   <canvas id="view" aria-label="Ship, planet and predicted path"></canvas>
@@ -41,7 +43,7 @@
 
   <div id="message" class="message" hidden></div>
 
-  <button id="tuner-toggle" type="button" class="tuner-toggle" aria-label="Tune speeds">
+  <button id="tuner-toggle" type="button" class="tuner-toggle" hidden aria-label="Tune speeds">
     <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="13.5" cy="5" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7.5" cy="10" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="11.5" cy="15" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
   </button>
   <div id="tuner" class="tuner" hidden>
@@ -52,5 +54,7 @@
   </div>
 
   <script type="module" src="cockpit/main.js"></script>
+  <!-- @spec FEED-001: shared feedback widget, project slug "slingshot", lifted above the time buttons. -->
+  <script src="https://feedback.andreizimin.com/widget.js" data-project="slingshot" data-accent="#0891b2" data-offset="calc(76px + env(safe-area-inset-bottom, 0px))" defer></script>
 </body>
 </html>

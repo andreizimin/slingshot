@@ -12,3 +12,4 @@ Design: `hosting-design.md` · Prefix: `HOST`
 - [x] **HOST-008**: The project shall pin SST as a dev dependency at `^3.17`.
 - [x] **HOST-009**: Before the first production deploy, the developer shall confirm that Route 53 has no existing `slingshot.andreizimin.com` record and the parent site has no wildcard alias that would conflict; if one exists, the deploy shall not proceed until the conflict is resolved.
 - [x] **HOST-010**: A production deploy shall happen only after the developer has played the local build from `npm run dev` and approved it.
+- [x] **HOST-011**: The repository shall run `npm test` in GitHub Actions on every push and pull request, using Node 22, with read-only permissions, no secrets and no deploy step.

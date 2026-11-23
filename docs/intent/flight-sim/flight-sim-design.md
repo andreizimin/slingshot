@@ -46,9 +46,11 @@ The initial values are tunable scenario constants. Changing them is a scenario c
 
 - `THRUST_ACCEL` = 5e-5 km/s² at full throttle, along the ship's nose.
 - `FUEL_DV` = 10.0 km/s total delta-v budget, generous enough to recover from a mistake.
-- `TURN_RATE` = π/480 rad per step (a half-turn takes 4 sim hours, 1 s at Normal).
-- `SPOOL_STEPS` = 120 steps from engine start to full throttle (0.25 s at Normal).
+- `TURN_RATE` = π/480 rad per step (a half-turn takes 4 sim hours, about 0.6 s at Normal).
+- `SPOOL_STEPS` = 120 steps from engine start to full throttle (about 0.15 s at Normal).
 - `ALIGN_TOLERANCE` = 10°: the engine fires only when the nose is this close to the wanted direction.
+
+**Only sideways speed can be changed.** At every step the ship has two axes: *toward*, the unit vector from the ship to the planet, and *sideways*, that vector turned 90° counter-clockwise (at the default start, sideways is world +y). A push `'up'` means +sideways and `'down'` means −sideways; `'left'`, `'right'` and anything else mean no push. The speed toward the planet is left entirely to gravity, which keeps the one control a kid has pointed at the one thing that decides boost or brake: which side of the planet they pass. `axes(state)` returns the two unit vectors, and `speedComponents(state)` splits the planet-frame velocity along them.
 
 Steering takes time. The ship has a **heading** (where its nose points) and a **throttle** (0 to 1). When a push is wanted, the ship first turns toward it at `TURN_RATE`; once within `ALIGN_TOLERANCE`, the engine spools up by `1/SPOOL_STEPS` per step, and thrust is `throttle · THRUST_ACCEL` along the heading. When nothing is wanted, or the ship is still turning, the engine is off and throttle drops to 0 at once.
 
@@ -56,9 +58,9 @@ Fuel is a delta-v budget: each firing step spends the delta-v it delivers (`thro
 
 ### Planned manoeuvres
 
-`planningBurn(state, thrustDir, dv)` adds `dv` km/s along one world axis to a **queued manoeuvre** (`burnDir`, `burnLeft`) without advancing time, moving the ship, or spending fuel. Repeated calls add as vectors; the total is capped at the fuel remaining. It has no effect unless `status` is `'flying'` and `thrustDir` is one of the four directions.
+`planningBurn(state, thrustDir, dv)` adds `+dv` (`'up'`) or `−dv` (`'down'`) to a signed **queued sideways manoeuvre**, `planDv`, without advancing time, moving the ship, or spending fuel. The total is clamped to ±`fuel`. Opposite calls cancel, so planning is fully reversible: a player can drag up, change their mind, drag back, and owe nothing. It has no effect unless `status` is `'flying'` and the direction is `'up'` or `'down'`.
 
-When no direction is held and a manoeuvre is queued, `step` flies it: turn toward `burnDir`, spool up, and burn until exactly `burnLeft` has been delivered, then cut the engine. A held direction overrides the queued manoeuvre for as long as it is held. Because the prediction runs the same `step`, a queued manoeuvre appears in the prediction line with its turn and spool-up included.
+When no direction is held and `planDv` is non-zero, `step` flies it: turn toward the sideways direction of its sign (recomputed each step from the current geometry), spool up, and burn until exactly `|planDv|` has been delivered or fuel runs out, then cut the engine. A held direction overrides the queued manoeuvre for as long as it is held. Because the prediction runs the same `step`, a queued manoeuvre appears in the prediction line with its turn and spool-up included.
 
 With these values, burning about 30% of the fuel early gives a close pass (under two planet radii) worth roughly +6.6 km/s behind or −10.8 km/s in front; burning more gives wider, gentler passes. Fuel spent buys safety; fuel saved buys drama.
 
@@ -68,7 +70,7 @@ The sim state is a plain object:
 
 ```js
 { t, steps, pos: {x, y}, vel: {x, y}, grav: {x, y}, fuel, status, closest, startSpeed,
-  heading, throttle, burnLeft, burnDir: {x, y} }
+  heading, throttle, planDv }
 // status: 'flying' | 'crashed' | 'departed'
 ```
 
@@ -157,7 +159,7 @@ These define "the physics works" for this slice:
 | End of flyby | `'departed'` status once back beyond `START_DISTANCE` after closest approach | Run forever | Gives the cockpit a moment to show the result and gives test 2 a defined measurement point. |
 | Planning while paused | Queue a manoeuvre the ship flies on resume | Instant velocity change; disallow | Paused means mapping a course, not spending fuel. Flying the plan with real turning and spool-up keeps it physically honest, and the prediction shows exactly what will happen. |
 | Crash | Status flag at physical radius; sim freezes | Bounce; pass through | Honest and simple. The visual radius is never used. |
-| Steering | Player picks one of four world directions; the ship turns to face it at a limited rate and spools up before thrusting | Instant thrust in any direction; manual rotate-and-thrust | Input stays as simple as four directions, while the delay makes steering feel like flying a real ship and makes early planning pay off. |
+| Steering | Player pushes sideways only (up or down, relative to the planet); the ship turns to face the push at a limited rate and spools up before thrusting | Four world directions; instant thrust in any direction; manual rotate-and-thrust | Sideways speed alone decides which side of the planet the ship passes, so one up/down control covers the whole decision. The turn and spool-up make steering feel like flying a real ship and reward planning early. |
 
 ## Open Questions & Future Decisions
 

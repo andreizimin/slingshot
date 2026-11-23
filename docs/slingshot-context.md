@@ -19,7 +19,7 @@ The fun is escalation: getting further and faster, one lily at a time.
 
 - **Steer the approach.** A small burn long before the flyby cheaply changes the closest approach distance. Burns after the flyby barely matter. Fuel is scarce and is effectively the score.
 - **Control time.** Slow motion near a planet, fast-forward across empty gaps, and a pause-and-plan mode where the kid nudges the approach and watches the prediction change. Time control is a core verb, not a settings slider.
-- **Read the prediction line.** A live trajectory projection that updates as the player steers. This is the single most important readability feature.
+- **Read the prediction line.** While paused, a trajectory projection shows exactly where the planned course leads and updates as the player adjusts it. This is the single most important readability feature. While the ship flies, it is hidden, so the screen shows only what is actually happening.
 
 ## Physics ground rules
 
@@ -52,7 +52,7 @@ Handing the full spec to Claude Code in one go did not produce a working game. T
 - One lily: a single planet on a fixed circular orbit around a star.
 - One ship with position, velocity, and a tiny fuel budget.
 - Symplectic integrator with a fixed step and variable steps per frame.
-- Live prediction line.
+- Prediction line while paused, for planning.
 - A speed readout in the star's frame.
 - Time controls: pause, slow, normal, fast.
 - Pass behind the planet and watch the speed readout climb; pass in front and watch it fall.
