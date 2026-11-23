@@ -21,10 +21,10 @@ The tour is its own component. Its steps, words and rules live in the pure `site
 | 4 | **Two kinds of speed**: grey toward the planet (gravity's), orange sideways (yours to steer). | Ring around the ship's arrows; a zero-length sideways label shows where the orange arrow lives | Next |
 | 5 | **Fuel is scarce**: pushing sideways burns it; a little early goes a long way. | Fuel bar | Next |
 | 6 | **Plan while paused**: drag or ↑ ↓ to plan; the dashed line shows exactly where you will go; planning is free. | Ship | Next |
-| 7 | **Your turn**: drag down until the line swings behind the planet. | Ship; steering is now live | The plan pushes down and the prediction ends in a departure; then Next |
+| 7 | **Your turn: pick a side**: drag down to swing behind the planet (speeds you up) or up to pass in front (slows you down), until the line clears the planet. | Ship; steering is now live | Any plan whose prediction ends in a departure; then Next |
 | 8 | **Fly!**: press Normal or Space; try Slow near the planet. | Time buttons; play is now live | Play starts (moves on by itself; the card hides while flying) |
-| 9 | **How the slingshot works** (mid-flight checkpoint): the planet's gravity bends your path; because it is moving, it drags you along as you swing behind it, like a spinning carousel flinging you. | The game pauses itself just after the closest approach; ring around the ship's arrows | Keep flying |
-| 10 | **Boost!**: the planet lent you +x km/s; passing in front slows you, try that next. | Speed readout | Done |
+| 9 | **How the slingshot works** (mid-flight checkpoint): the planet's gravity bends your path; because it is moving, it drags you along as you swing behind it, or tugs you backwards as you cross in front of it, so that side slows you down. | The game pauses itself just after the closest approach; ring around the ship's arrows | Keep flying |
+| 10 | **Boost!** (behind sped you up by x) or **Brake!** (in front slowed you down by x; this side slows you down, handy for arriving without overshooting). | Speed readout | I'm ready (into free flight), or Try the other side |
 
 If the tour flight crashes, the result card becomes **Bonk! Too close** with **Try again**, which resets the flight and returns to step 7 with a "too close, a little wider" note. If the flight ends without a gain, the result card says **Not quite** and points back to passing behind.
 
@@ -32,9 +32,10 @@ The destination exists only in the story for now; real destinations arrive with 
 
 ## When It Shows
 
-- **First visit:** if `localStorage` has no `slingshot.tourDone`, the tour starts on load. Finishing it (Done, or R after the result) or skipping it sets the flag. If storage is unavailable, the tour simply shows again next visit.
-- **Replay:** a round **?** button at the top right ("How to play") resets the flight and starts the tour from step 1.
-- **Skip:** every card has **Skip tour**, which ends it at once and leaves a normal paused game.
+- **Every load:** the tutorial is the game's front door. It always starts from step 1, the same way, on every visit; nothing is stored on the device.
+- **The way out:** after a successful boost, the last card's button is **I'm ready**. It ends the tutorial and starts **free flight**: the same scenario with every control live and no captions, plus a small "Free flight · full game coming soon" note. Free flight stands in for the main game; when that exists, I'm ready will lead there instead. A flight with no gain, or a crash, offers **Try again** instead.
+- **Skip:** every card has **Skip tour**, which also starts free flight.
+- **Replay:** a round **?** button at the top right ("How to play") resets the flight and starts the tutorial from step 1.
 
 ## Input During the Tour
 

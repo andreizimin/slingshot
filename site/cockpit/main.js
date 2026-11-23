@@ -116,6 +116,8 @@ function setSetting(next) {
   } else {
     // @spec COCKPIT-CTL-011 — resuming commits the planned course and charges its fuel.
     if (plan) { state = plan; plan = null; }
+    // @spec TOUR-014 — remember which side the tutorial flight takes, for the checkpoint's words.
+    if (tours.current(tour)?.id === 'fly') tour = { ...tour, side: tours.sideOf(state.planDv) };
     // @spec ANA-002 — a flight is launched when play starts from the ready state.
     if (ready) { const ev = view.launchEvent(state.planDv); track(ev.name, ev.data); }
     setting = next;
@@ -586,9 +588,11 @@ const tourEl = {
   button: document.getElementById('tour-next'),
   skip: document.getElementById('tour-skip'),
   back: document.getElementById('tour-back'),
+  alt: document.getElementById('tour-alt'),
   replay: document.getElementById('tour-replay'),
 };
 const HUD_TARGETS = ['hud-speed', 'hud-fuel', 'hud-time'];
+const freeNote = document.getElementById('free-note');
 
 // @spec TOUR-002
 function startTour(auto) {
@@ -600,9 +604,10 @@ function startTour(auto) {
 function endTour(how) {
   const step = tours.current(tour);
   tour = null;
-  tours.markDone(window.localStorage);
   if (how === 'skip') track('tour_skip', { step: step ? tours.stepIndex(step.id) + 1 : 0 });
   else track('tour_complete', { change: Math.round(sim.speedChange(state) * 10) / 10 });
+  // @spec TOUR-013 — leaving the tutorial (I'm ready, or Skip) starts free flight from the beginning.
+  reset();
   for (const id of HUD_TARGETS) document.getElementById(id)?.classList.remove('tour-target');
   tourEl.card.hidden = true;
 }
@@ -621,8 +626,8 @@ function tourContext() {
 function pressTourButton() {
   const card = tours.cardFor(tour, tourContext());
   if (!card || !card.canAdvance || tourEl.card.hidden) return;
-  if (card.action === 'retry') { reset(); tour = tours.afterCrash(); return; }
-  if (card.action === 'finish') { endTour('complete'); return; }
+  if (card.action === 'retry') { retryTour(); return; }
+  if (card.action === 'ready') { endTour('complete'); return; }
   if (card.action === 'resume') { tour = tours.next(tour); setSetting(resumeTo); return; }
   tour = tours.next(tour);
 }
@@ -633,13 +638,27 @@ function pressTourButton() {
 function resetKey() {
   const action = tours.resetAction(tours.current(tour), tourContext());
   if (action === 'restart') reset();
-  else if (action === 'retry') { reset(); tour = tours.afterCrash(); }
-  else if (action === 'finish') { endTour('complete'); reset(); }
+  else if (action === 'retry') retryTour();
+  else if (action === 'ready') endTour('complete');
+}
+
+// Back to "Your turn" for another go: after a crash with a "too close" note, otherwise plainly.
+// @spec TOUR-005
+function retryTour() {
+  const crashed = state.status === 'crashed';
+  reset();
+  tour = crashed ? tours.afterCrash() : { active: true, index: tours.stepIndex('try') };
 }
 
 tourEl.button.addEventListener('click', () => { pressTourButton(); tourEl.button.blur(); });
 tourEl.skip.addEventListener('click', () => { endTour('skip'); tourEl.skip.blur(); });
 tourEl.back.addEventListener('click', () => { tour = tours.prev(tour); tourEl.back.blur(); });
+// @spec TOUR-014 — "Try the other side" flies the tutorial again from "Your turn".
+tourEl.alt.addEventListener('click', () => {
+  retryTour();
+  tour = { ...tour, otherSide: true };
+  tourEl.alt.blur();
+});
 // @spec TOUR-002 — the ? button replays the tour from the start.
 tourEl.replay.addEventListener('click', () => { startTour(false); tourEl.replay.blur(); });
 
@@ -662,6 +681,8 @@ function updateTourCard() {
   if (card.button) tourEl.button.textContent = card.button;
   tourEl.button.disabled = !card.canAdvance;
   tourEl.back.hidden = !tours.canGoBack(tour);
+  tourEl.alt.hidden = !card.secondary;
+  if (card.secondary) tourEl.alt.textContent = card.secondary;
   tourEl.card.dataset.anchor = HUD_TARGETS.includes(step.target) ? step.target : 'world';
   if (tourEl.card.dataset.anchor === 'world') placeCardNearWorld(step);
   else { tourEl.card.style.left = ''; tourEl.card.style.top = ''; }
@@ -799,14 +820,15 @@ function frame(now) {
   updateHud();
   updateMessage();
   updateTourCard();
+  freeNote.hidden = !!tour; // @spec TOUR-013 — free flight stands in for the main game for now
 
   requestAnimationFrame(frame);
 }
 
 resize();
 reset();
-// @spec TOUR-002 — first visit: the tour starts by itself.
-if (tours.shouldAutoStart(window.localStorage)) startTour(true);
+// @spec TOUR-002 — the tutorial always starts, the same way, on every load.
+if (tours.startsOnLoad()) startTour(true);
 camX = targetCamera()[0];
 camY = targetCamera()[1];
 scale = targetScale();
