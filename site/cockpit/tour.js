@@ -21,7 +21,7 @@ export const STEPS = [
   {
     id: 'speed', focus: 'planet', target: 'hud-speed', advance: 'tap',
     title: 'Your speed',
-    text: 'This is how fast you are flying. Your goal: make this number go up.',
+    text: 'This is how fast you are flying. Watch it: the planet can push this number up, or pull it down.',
   },
   {
     id: 'arrows', focus: 'planet', target: 'arrows', advance: 'tap',
@@ -104,7 +104,9 @@ export const autoAdvances = (step) => step.advance === 'running';
 export function next(tour) {
   if (!tour?.active) return tour;
   const index = tour.index + 1;
-  return index >= STEPS.length ? { active: false, index: STEPS.length - 1, done: true } : { active: true, index };
+  if (index >= STEPS.length) return { active: false, index: STEPS.length - 1, done: true };
+  // Keep the side chosen at launch, so the checkpoint and result can explain it.
+  return tour.side ? { active: true, index, side: tour.side } : { active: true, index };
 }
 
 // Going back one step: allowed on any step before the flight's checkpoint and result.

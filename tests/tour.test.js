@@ -224,3 +224,14 @@ test('Back goes one step back on every step up to "Fly!", never during or after 
 test('free flight follows the tutorial, with a "coming soon" note on the page', () => {
   assert.match(html, /id="free-note"[^>]*hidden[^>]*>Free flight · full game coming soon</);
 });
+
+// @spec TOUR-014
+test('the side chosen at launch survives the move from "Fly!" to the checkpoint', () => {
+  const launched = { ...at('fly'), side: 'front' };
+  const swing = { ...tour.next(launched), swingShown: true };
+  assert.equal(tour.current(swing).id, 'swing');
+  assert.equal(swing.side, 'front');
+  assert.match(tour.cardFor(swing, { ...paused, status: 'flying' }).text, /slows you down/);
+  assert.equal(tour.next(swing).side, 'front', 'kept into the result step too');
+  assert.match(tour.STEPS.find((s) => s.id === 'speed').text, /up, or pull it down/);
+});
