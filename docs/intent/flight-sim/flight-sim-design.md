@@ -44,14 +44,21 @@ The initial values are tunable scenario constants. Changing them is a scenario c
 
 ### Fuel and thrust
 
-- `THRUST_ACCEL` = 5e-5 km/s², applied in one of four world-axis directions while held.
-- `FUEL_DV` = 5.0 km/s total delta-v budget.
+- `THRUST_ACCEL` = 5e-5 km/s² at full throttle, along the ship's nose.
+- `FUEL_DV` = 10.0 km/s total delta-v budget, generous enough to recover from a mistake.
+- `TURN_RATE` = π/480 rad per step (a half-turn takes 4 sim hours, 1 s at Normal).
+- `SPOOL_STEPS` = 120 steps from engine start to full throttle (0.25 s at Normal).
+- `ALIGN_TOLERANCE` = 10°: the engine fires only when the nose is this close to the wanted direction.
 
-Fuel is a delta-v budget: each step with thrust on spends `THRUST_ACCEL · DT` of it. If a step would spend more than remains, its thrust is scaled down to use exactly what is left, and fuel is then exactly zero. Thrust has no effect when fuel is zero.
+Steering takes time. The ship has a **heading** (where its nose points) and a **throttle** (0 to 1). When a push is wanted, the ship first turns toward it at `TURN_RATE`; once within `ALIGN_TOLERANCE`, the engine spools up by `1/SPOOL_STEPS` per step, and thrust is `throttle · THRUST_ACCEL` along the heading. When nothing is wanted, or the ship is still turning, the engine is off and throttle drops to 0 at once.
 
-### Planning burns
+Fuel is a delta-v budget: each firing step spends the delta-v it delivers (`throttle · THRUST_ACCEL · DT`). If a step would spend more than remains, its thrust is scaled down to use exactly what is left, and fuel is then exactly zero. Thrust has no effect when fuel is zero.
 
-`planningBurn(state, thrustDir, dv)` applies an **instantaneous** velocity change of up to `dv` km/s along one world axis without advancing time. It spends exactly the delta-v it applies, capped at the fuel remaining, so fuel means the same thing whether a burn happens while flying or while time is frozen. Position, `t`, `steps` and `grav` are unchanged (gravity depends only on position and time). It has no effect unless `status` is `'flying'` and `thrustDir` is one of the four directions. This is what lets the player nudge the approach while paused and watch the prediction respond.
+### Planned manoeuvres
+
+`planningBurn(state, thrustDir, dv)` adds `dv` km/s along one world axis to a **queued manoeuvre** (`burnDir`, `burnLeft`) without advancing time, moving the ship, or spending fuel. Repeated calls add as vectors; the total is capped at the fuel remaining. It has no effect unless `status` is `'flying'` and `thrustDir` is one of the four directions.
+
+When no direction is held and a manoeuvre is queued, `step` flies it: turn toward `burnDir`, spool up, and burn until exactly `burnLeft` has been delivered, then cut the engine. A held direction overrides the queued manoeuvre for as long as it is held. Because the prediction runs the same `step`, a queued manoeuvre appears in the prediction line with its turn and spool-up included.
 
 With these values, burning about 30% of the fuel early gives a close pass (under two planet radii) worth roughly +6.6 km/s behind or −10.8 km/s in front; burning more gives wider, gentler passes. Fuel spent buys safety; fuel saved buys drama.
 
@@ -60,7 +67,8 @@ With these values, burning about 30% of the fuel early gives a close pass (under
 The sim state is a plain object:
 
 ```js
-{ t, steps, pos: {x, y}, vel: {x, y}, grav: {x, y}, fuel, status, closest, startSpeed }
+{ t, steps, pos: {x, y}, vel: {x, y}, grav: {x, y}, fuel, status, closest, startSpeed,
+  heading, throttle, burnLeft, burnDir: {x, y} }
 // status: 'flying' | 'crashed' | 'departed'
 ```
 
@@ -97,9 +105,9 @@ Time settings are measured in **steps per real second**, not per rendered frame,
 | Setting | Steps per real second | Sim time per real second |
 |---|---|---|
 | paused | 0 | 0 |
-| slow | 120 | 1 hour |
-| normal | 480 | 4 hours |
-| fast | 1920 | 16 hours |
+| slow | 200 | ~1.7 hours |
+| normal | 800 | ~6.7 hours |
+| fast | 3300 | ~27.5 hours |
 
 `stepsForFrame(setting, elapsedSeconds, carry)` returns `{ steps, carry }`. It converts the real time since the last frame into a whole number of steps and carries the fractional remainder to the next frame. Elapsed time above 0.25 s (a background tab, a stall) is clamped to 0.25 s, so the game never jumps ahead after being hidden.
 
@@ -147,9 +155,9 @@ These define "the physics works" for this slice:
 | Thrust and fuel | 5e-5 km/s², 5 km/s budget | 2e-5 km/s² with 2 km/s | Simulated: the smaller budget crashes unless the player burns everything at once. The chosen values give a real choice of side and distance, with a 7-second full burn at Normal. |
 | Time control unit | Steps per real second with a fractional carry and 0.25 s clamp | Steps per animation frame | Per-frame stepping runs twice as fast on 120 Hz displays and leaps after a background tab. |
 | End of flyby | `'departed'` status once back beyond `START_DISTANCE` after closest approach | Run forever | Gives the cockpit a moment to show the result and gives test 2 a defined measurement point. |
-| Burning while paused | Instantaneous delta-v (`planningBurn`) | Run hidden sim time while paused; disallow | An impulse is physically honest, spends the same fuel per km/s, and keeps "paused" meaning frozen time. |
+| Planning while paused | Queue a manoeuvre the ship flies on resume | Instant velocity change; disallow | Paused means mapping a course, not spending fuel. Flying the plan with real turning and spool-up keeps it physically honest, and the prediction shows exactly what will happen. |
 | Crash | Status flag at physical radius; sim freezes | Bounce; pass through | Honest and simple. The visual radius is never used. |
-| Thrust directions | Four world axes | Rotate-and-thrust | No ship orientation to learn; maps onto arrow keys. |
+| Steering | Player picks one of four world directions; the ship turns to face it at a limited rate and spools up before thrusting | Instant thrust in any direction; manual rotate-and-thrust | Input stays as simple as four directions, while the delay makes steering feel like flying a real ship and makes early planning pay off. |
 
 ## Open Questions & Future Decisions
 

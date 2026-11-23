@@ -36,7 +36,7 @@ test('initial state: 4e6 km sunward, v_inf 10 km/s, full fuel', () => {
   close(v.y, 0, 1e-9);
   assert.equal(s.t, 0);
   assert.equal(s.steps, 0);
-  assert.equal(s.fuel, 5.0);
+  assert.equal(s.fuel, 10.0);
   assert.equal(s.status, 'flying');
   close(s.closest, 4.0e6, 1e-6);
   close(s.startSpeed, sim.starFrameSpeed(s), 1e-12);
@@ -77,30 +77,63 @@ test('closest tracks minimum distance', () => {
   assert.ok(s.closest < 4.0e6);
 });
 
+// A state already facing `angle` with the engine at full throttle.
+const spooled = (angle, extra = {}) => ({ ...sim.initialState(), heading: angle, throttle: 1, ...extra });
+
 // @spec SIM-FUEL-001
-test('thrust spends THRUST_ACCEL*DT fuel and pushes along the axis', () => {
-  const s0 = sim.initialState();
-  const coastS = sim.step(s0, null);
-  const up = sim.step(s0, 'up');
-  close(up.fuel, 5.0 - 5e-5 * 30, 1e-12);
-  close(up.vel.y - coastS.vel.y, 5e-5 * 30, 1e-9);
-  const left = sim.step(s0, 'left');
-  close(left.vel.x - coastS.vel.x, -5e-5 * 30, 1e-9);
+test('full-throttle thrust spends THRUST_ACCEL*DT fuel and pushes along the nose', () => {
+  const up0 = spooled(Math.PI / 2);
+  const up = sim.step(up0, 'up');
+  close(up.fuel, 10.0 - 5e-5 * 30, 1e-12);
+  close(up.vel.y - sim.step(up0, null).vel.y, 5e-5 * 30, 1e-9);
+  const left0 = spooled(Math.PI);
+  assert.deepEqual(sim.step(left0, 'left').vel, sim.step(left0, null).vel, 'no thrust toward/away from the planet');
 });
 
 // @spec SIM-FUEL-002
 test('last partial burn empties fuel exactly', () => {
-  const s0 = { ...sim.initialState(), fuel: 0.0005 };
-  const coastS = sim.step(s0, null);
+  const s0 = spooled(-Math.PI / 2, { fuel: 0.0005 });
   const s1 = sim.step(s0, 'down');
   assert.equal(s1.fuel, 0);
-  close(s1.vel.y - coastS.vel.y, -0.0005, 1e-9);
+  close(s1.vel.y - sim.step(s0, null).vel.y, -0.0005, 1e-9);
 });
 
 // @spec SIM-FUEL-003
 test('no thrust when fuel is empty', () => {
-  const s0 = { ...sim.initialState(), fuel: 0 };
-  assert.deepEqual(sim.step(s0, 'up'), sim.step(s0, null));
+  const s0 = spooled(Math.PI / 2, { fuel: 0 });
+  const a = sim.step(s0, 'up');
+  const b = sim.step(s0, null);
+  assert.deepEqual(a.vel, b.vel);
+  assert.equal(a.fuel, 0);
+  assert.equal(a.throttle, 0);
+});
+
+// @spec SIM-FUEL-006
+test('ship turns at a limited rate and spools up before full thrust', () => {
+  let s = sim.initialState(); // facing +x
+  s = sim.step(s, 'up');
+  assert.equal(s.fuel, 10.0, 'no thrust while still turning');
+  close(s.heading, sim.TURN_RATE, 1e-12);
+  let steps = 1;
+  while (s.fuel === 10.0 && steps < 1000) { s = sim.step(s, 'up'); steps++; }
+  const minTurn = Math.ceil((Math.PI / 2 - sim.ALIGN_TOLERANCE) / sim.TURN_RATE);
+  assert.ok(steps >= minTurn, `fired after ${steps} steps, expected at least ${minTurn}`);
+  close(s.throttle, 1 / sim.SPOOL_STEPS, 1e-12);
+  for (let i = 0; i < sim.SPOOL_STEPS + 5; i++) s = sim.step(s, 'up');
+  assert.equal(s.throttle, 1);
+  s = sim.step(s, null);
+  assert.equal(s.throttle, 0, 'engine cuts when the push stops');
+});
+
+// @spec SIM-FUEL-007
+test('a queued manoeuvre is flown later and delivers exactly the planned delta-v', () => {
+  const start = sim.initialState();
+  let s = sim.planningBurn(start, 'down', 1.0);
+  assert.equal(s.fuel, 10.0, 'planning spends nothing');
+  for (let i = 0; i < 20000 && s.planDv !== 0; i++) s = sim.step(s, null);
+  assert.equal(s.planDv, 0);
+  close(s.fuel, 9.0, 1e-9);
+  assert.equal(s.throttle, 0);
 });
 
 // @spec SIM-FUEL-004
@@ -111,23 +144,34 @@ test('unknown thrust direction is ignored', () => {
 });
 
 // @spec SIM-FUEL-005
-test('planning burn changes velocity instantly without advancing time', () => {
+test('planning burn queues a manoeuvre without moving, spending, or advancing time', () => {
   const s0 = sim.initialState();
   const s1 = sim.planningBurn(s0, 'down', 0.4);
-  close(s1.vel.y, s0.vel.y - 0.4, 1e-12);
-  assert.equal(s1.vel.x, s0.vel.x);
-  close(s1.fuel, 4.6, 1e-12);
+  close(s1.planDv, -0.4, 1e-12);
+  assert.deepEqual(s1.vel, s0.vel);
+  assert.equal(s1.fuel, 10.0);
   assert.deepEqual(s1.pos, s0.pos);
-  assert.deepEqual(s1.grav, s0.grav);
   assert.equal(s1.t, 0);
-  assert.equal(s1.steps, 0);
-  assert.equal(s0.fuel, 5.0, 'input untouched');
-  const capped = sim.planningBurn({ ...s0, fuel: 0.1 }, 'right', 1);
-  assert.equal(capped.fuel, 0);
-  close(capped.vel.x, s0.vel.x + 0.1, 1e-12);
+  assert.equal(s0.planDv, 0, 'input untouched');
+  const back = sim.planningBurn(s1, 'up', 0.4);
+  assert.equal(back.planDv, 0, 'reversible: up cancels down');
+  assert.deepEqual(sim.planningBurn(s1, 'right', 0.3), s1, 'only sideways plans');
+  const capped = sim.planningBurn({ ...s0, fuel: 0.1 }, 'up', 1);
+  close(capped.planDv, 0.1, 1e-12);
   assert.deepEqual(sim.planningBurn(s0, 'sideways', 1), s0);
   const crashed = { ...s0, status: 'crashed' };
   assert.deepEqual(sim.planningBurn(crashed, 'up', 1), crashed);
+});
+
+// @spec SIM-READ-002
+test('speed splits into toward-planet and sideways components', () => {
+  const s = sim.initialState();
+  const c = sim.speedComponents(s);
+  close(c.toward, Math.sqrt(100 + (2 * sim.PLANET_GM) / 4.0e6), 1e-9);
+  close(c.side, 0, 1e-9);
+  const { side } = sim.axes(s);
+  close(side.x, 0, 1e-12);
+  close(side.y, 1, 1e-12);
 });
 
 // @spec SIM-END-001, SIM-END-003
@@ -139,19 +183,18 @@ test('coasting from the default start crashes', () => {
 
 // @spec SIM-TIME-002, SIM-TIME-003
 test('stepsForFrame converts real time with carry and clamps', () => {
+  assert.deepEqual(sim.RATES, { paused: 0, slow: 200, normal: 800, fast: 3300 });
   let r = sim.stepsForFrame('normal', 1 / 60, 0);
-  assert.equal(r.steps, 8);
-  close(r.carry, 0, 1e-9);
-  r = sim.stepsForFrame('slow', 1 / 120, 0);
-  assert.equal(r.steps, 1);
+  assert.equal(r.steps, Math.floor(800 / 60));
+  close(r.carry, 800 / 60 - Math.floor(800 / 60), 1e-9);
   r = sim.stepsForFrame('fast', 10, 0);
-  assert.equal(r.steps, 480);
+  assert.equal(r.steps, Math.floor(3300 * 0.25), 'clamped to 0.25 s');
   r = sim.stepsForFrame('paused', 0.1, 0.5);
   assert.equal(r.steps, 0);
   close(r.carry, 0.5, 1e-12);
   r = sim.stepsForFrame('slow', 0.01, 0.9);
   assert.equal(r.steps, 2);
-  close(r.carry, 0.1, 1e-9);
+  close(r.carry, 0.9, 1e-9);
 });
 
 // @spec SIM-TIME-004

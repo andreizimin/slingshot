@@ -3,3 +3,4 @@ node_modules/
 sst-env.d.ts
 .DS_Store
 .env*
+.claude/settings.local.json

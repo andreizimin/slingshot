@@ -32,7 +32,7 @@ The game is `index.html` plus plain JavaScript ES modules, served as static file
 
 ## Target Users
 
-- **Kid players (7–12).** They need one obvious number that goes up or down, a line showing where they're headed, and controls simple enough to learn without reading.
+- **Kid players (7–12).** They need one obvious number that goes up or down, a line showing where they're headed, and controls simple enough to learn without reading. Many first try it on a phone from a shared link, so touch is a first-class input alongside mouse and keyboard.
 - **Testers and the developer.** They need to reliably produce both a boost and a brake, and to trust that a surprising result is the physics and not a bug.
 
 ## Goals
@@ -45,8 +45,8 @@ The game is `index.html` plus plain JavaScript ES modules, served as static file
 ## Non-Goals
 
 - Multiple systems, drifting lilies, map reveal, missions, scoring or narrative. These are later slices.
-- Mobile-first layout or touch controls. Desktop browser with a keyboard is the target for this slice.
-- Saving progress, accounts, analytics or any backend.
+- Saving progress, accounts or any backend.
+- Analytics, feedback collection, CI and ticket tracking in the MVP. These join at beta (see Release Stages).
 - Sound and art beyond simple shapes.
 
 ## Tenets
@@ -89,6 +89,15 @@ The cockpit depends on the flight sim; the flight sim depends on nothing. Visual
 | Planet motion | Prescribed circular orbit (position is a function of time) | Integrate the planet under the star's gravity | A prescribed orbit can't drift, keeps the scenario reproducible, and the planet's velocity is exact. The ship feels both bodies' gravity; the planet feels nothing. |
 | On-screen proportions | Ship and planets drawn at comparable sizes, decoupled from physical radius | True scale; uniformly scaled-up bodies | At true scale the ship is invisible and the planet is a speck next to its orbit. Decoupling drawn size from physics lets the picture be readable without changing a single trajectory. |
 | Hosting | AWS S3 + CloudFront with a Route 53 subdomain, provisioned by SST `StaticSite` | Cloudflare, Vercel, GitHub Pages | Matches the developer's existing AWS setup for the parent domain, so DNS and certificates come from the same zone. |
+
+## Release Stages
+
+| Stage | Bar |
+|---|---|
+| **MVP** | The first vertical slice is live, the physics acceptance tests pass, and a tester can produce a boost and a brake. |
+| **Beta** | Everything in the MVP, plus: **Umami analytics** (cookieless, with no personal data, because the players are children); the **shared feedback widget** embedded with this project's identifier; a **Linear project** linked, with work tracked as tickets on branches; **automated cockpit tests** alongside the sim tests; and **CI** running `npm test` on every push. |
+
+Each beta item gets its own LLD or LLD update when it is built.
 
 ## Success Metrics
 

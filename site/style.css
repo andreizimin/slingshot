@@ -1,6 +1,8 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1530; }
 body { font-family: Nunito, system-ui, sans-serif; color: #f1f5f9; }
-canvas { position: fixed; inset: 0; display: block; }
+canvas { position: fixed; inset: 0; display: block; touch-action: none; cursor: crosshair; }
+/* @spec COCKPIT-MOB-001 */
+body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 
 .hud { position: fixed; pointer-events: none; }
 .label { font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #cbd5e1; }
@@ -15,7 +17,10 @@ canvas { position: fixed; inset: 0; display: block; }
 
 .fuel { left: 32px; top: 36px; width: 220px; display: flex; flex-direction: column; gap: 8px; }
 .bar { height: 18px; border-radius: 9px; background: #1e2a4a; border: 2px solid #334155; overflow: hidden; }
-.fill { height: 100%; width: 100%; background: #38bdf8; border-radius: 9px; }
+.bar { position: relative; }
+.planned { position: absolute; left: 0; top: 0; height: 100%; width: 100%; border-radius: 9px;
+  background: repeating-linear-gradient(135deg, rgba(56,189,248,0.45) 0 6px, rgba(56,189,248,0.2) 6px 12px); }
+.fill { position: relative; height: 100%; width: 100%; background: #38bdf8; border-radius: 9px; }
 .fill.low { background: #ef4444; }
 
 .time { left: 0; right: 0; bottom: 32px; display: flex; justify-content: center; gap: 12px; pointer-events: auto; width: fit-content; margin: 0 auto; }
@@ -33,5 +38,40 @@ canvas { position: fixed; inset: 0; display: block; }
   padding: 18px 28px; text-align: center; font-size: 22px; font-weight: 700; line-height: 1.4; max-width: 520px;
 }
 .message .big { display: block; font-size: 40px; font-weight: 800; }
+
+.tuner-toggle {
+  position: fixed; right: 20px; bottom: 36px; width: 44px; height: 44px; border-radius: 22px;
+  border: 2px solid #334155; background: #16213f; color: #cbd5e1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.tuner {
+  position: fixed; right: 20px; bottom: 92px; width: 260px; padding: 14px 16px; border-radius: 16px;
+  background: rgba(22, 33, 63, 0.96); border: 2px solid #334155; display: flex; flex-direction: column; gap: 10px;
+  font-size: 14px; font-weight: 700; color: #e2e8f0;
+}
+.tuner[hidden] { display: none; }
+.tuner-title { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; }
+.tuner label { display: grid; grid-template-columns: 56px 1fr 44px; align-items: center; gap: 8px; }
+.tuner input { width: 100%; accent-color: #22d3ee; }
+.tuner output { text-align: right; font-variant-numeric: tabular-nums; color: #67e8f9; }
+
+/* @spec COCKPIT-MOB-003 */
+@media (max-width: 600px) {
+  .speed { top: 16px; }
+  .speed .value { font-size: 40px; }
+  .speed .unit { font-size: 18px; }
+  .change { font-size: 18px; }
+  .label { font-size: 12px; }
+  .fuel { left: 16px; top: 20px; width: 110px; gap: 6px; }
+  .bar { height: 14px; }
+  .help { display: none; }
+  .tuner-toggle { right: 12px; bottom: 76px; width: 40px; height: 40px; }
+  .tuner { right: 12px; left: 12px; width: auto; bottom: 124px; }
+  .time { bottom: max(16px, env(safe-area-inset-bottom)); gap: 6px; }
+  .time button { height: 44px; padding: 0 10px; gap: 5px; font-size: 14px; border-radius: 22px; }
+  .time button svg { width: 14px; height: 14px; }
+  .message { font-size: 17px; padding: 14px 18px; max-width: calc(100vw - 32px); box-sizing: border-box; width: max-content; }
+  .message .big { font-size: 28px; }
+}
 .message .up { color: #4ade80; }
 .message .down { color: #f87171; }

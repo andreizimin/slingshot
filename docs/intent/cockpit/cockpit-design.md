@@ -50,7 +50,7 @@ The star is not drawn in the planet-frame view (it is about 780 million km away)
 - **Ready**: on load and after reset, before the first unpause, a centred message "Push up or down to pick a side, then press Space to go."
 - **Crash**: when the sim status is `crashed`, a centred message "Bonk! You hit the planet. Press R to try again."
 - **Result**: when the sim status is `departed`, a centred card with the final speed change: "Boost! +6.6 km/s" in green if `speedChange` is above +0.05, "Brake! −10.8 km/s" in red if below −0.05, otherwise "No change", plus "Fuel left: 70%" and "Press R to fly again." During the flyby the live `▲/▼` change keeps updating; the card is the result.
-- **Help** (top right, small, right-aligned, clear of the time buttons at any width): "Arrows: push · Space: pause · 1 2 3: speed · R: restart".
+- **Help** (top right, small, right-aligned, clear of the time buttons at any width): "Arrows: push · Space: pause · 1–4: pause/slow/normal/fast · R: restart".
 
 The planet-frame speed is not displayed in this slice.
 
@@ -60,15 +60,23 @@ The planet-frame speed is not displayed in this slice.
 |---|---|
 | Arrow keys (held) | Thrust in that screen direction (up = world `+y`, etc.). Held arrows form a stack: the most recently pressed one that is still held wins; releasing it falls back to the next one still held. |
 | Space | Toggle pause. Unpausing returns to the setting that was active before the pause. |
-| 1 / 2 / 3 | Slow / Normal / Fast (also unpauses) |
+| 1 / 2 / 3 / 4 | Pause / Slow / Normal / Fast (2–4 also unpause) |
 | R | Reset to the initial scenario: new sim state, cleared trail, paused in the ready state, time setting kept |
 | Click a time button | Same as the matching key |
 
+**Drag to push (touch and mouse).** Pressing anywhere on the canvas with a finger or the mouse and dragging works like holding an arrow. Once the pointer is more than 24 px from where it went down, the push direction is the dominant axis of the drag (up, down, left or right); it updates as the drag moves and stops when the pointer is released, cancelled, or the window loses focus. The canvas captures the pointer, so dragging off the edge keeps pushing. While a drag is active, a faint ring marks where it started and an arrow points from there to the pointer. Keyboard arrows, if also held, take priority. All of this uses Pointer Events, so one code path serves touch, mouse and pen.
+
 Key handling is on the window, so no element needs focus. Arrow keys and Space call `preventDefault`, so the page never scrolls and a focused button is never activated by Space; time buttons also drop focus after a click. When the window loses focus, all held arrows are released.
 
-**Pause-and-plan.** While paused and the ship is flying, a held arrow applies a planning burn (`planningBurn`) each frame of `FUEL_DV / 3` km/s per real second, so a full tank takes 3 seconds of holding. Time stays frozen, the flame shows, the fuel bar drops, and the prediction line is recomputed that frame, so the player sees the new path immediately. This is the intended way to pick a side from the ready state.
+**Pause-and-plan.** While paused and the ship is flying, a held arrow or drag shapes a *planned course*: the cockpit keeps a separate planned state, applying `planningBurn` to it at `PLAN_RATE` (5/3 km/s per real second of holding), and draws the prediction from the plan. The live state is untouched, so no fuel is spent while planning. On resume, the planned state becomes the live state and its fuel is charged; reset discards it. The fuel bar shows the plan's cost as a striped section between the fuel left after the plan and the fuel held now. This is the intended way to pick a side from the ready state.
 
 The page starts **paused** in the ready state, with Normal as the setting it resumes to.
+
+## Phones and Touch Screens
+
+- The page disables browser panning and pinch-zoom over the game (`touch-action: none`), so drags steer the ship instead of scrolling the page.
+- On a touch-first device (`pointer: coarse`), the help line reads "Drag to push · buttons: speed", and the ready message reads "Drag up or down to pick a side, then tap Normal to go."
+- On screens narrower than 600 px, the speed readout shrinks (40 px number), the fuel bar narrows to 110 px, the help line is hidden, and the time buttons shrink to fit four across while staying at least 44 px tall. Message cards fit within the screen width minus 32 px.
 
 ## Frame Loop
 
@@ -106,7 +114,6 @@ The approved visual reference is the cockpit mockup canvas "Slingshot cockpit mo
 ## Open Questions & Future Decisions
 
 ### Deferred
-1. Touch controls and mobile layout.
 3. A debug overlay (planet-frame speed, closest-approach distance) behind a hidden key.
 4. Whether to show the predicted post-flyby speed before the flyby happens.
 

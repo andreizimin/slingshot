@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Slingshot</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap">
@@ -19,7 +19,7 @@
 
   <div class="hud fuel">
     <span class="label">Fuel</span>
-    <div class="bar"><div id="fuel-fill" class="fill"></div></div>
+    <div class="bar"><div id="fuel-planned" class="planned"></div><div id="fuel-fill" class="fill"></div></div>
   </div>
 
   <div class="hud time">
@@ -37,9 +37,19 @@
     </button>
   </div>
 
-  <div class="hud help">Arrows: push · Space: pause · 1 2 3: speed · R: restart</div>
+  <div id="help" class="hud help">↑ ↓ or drag up/down: steer sideways · Space: pause · 1–4: pause/slow/normal/fast · R: restart</div>
 
   <div id="message" class="message" hidden></div>
+
+  <button id="tuner-toggle" type="button" class="tuner-toggle" aria-label="Tune speeds">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h9M15 5h2M3 10h3M9 10h8M3 15h7M13 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="13.5" cy="5" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7.5" cy="10" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="11.5" cy="15" r="1.8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+  </button>
+  <div id="tuner" class="tuner" hidden>
+    <div class="tuner-title">Steps per second</div>
+    <label>Slow <input id="tune-slow" type="range" min="10" max="1000" step="10"><output id="tune-slow-val"></output></label>
+    <label>Normal <input id="tune-normal" type="range" min="50" max="3000" step="10"><output id="tune-normal-val"></output></label>
+    <label>Fast <input id="tune-fast" type="range" min="200" max="8000" step="50"><output id="tune-fast-val"></output></label>
+  </div>
 
   <script type="module" src="cockpit/main.js"></script>
 </body>
