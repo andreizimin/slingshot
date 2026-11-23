@@ -17,4 +17,6 @@ Design: `tour-design.md` · Prefix: `TOUR`
 - [x] **TOUR-013**: When the player presses I'm ready or Skip tour, the cockpit shall end the tutorial and start free flight from the initial scenario, with every control live and a "Free flight · full game coming soon" note shown, standing in for the main game until it exists.
 - [x] **TOUR-014**: The tutorial shall teach both sides: "Your turn" shall offer passing behind (drag down, speeds you up) or in front (drag up, slows you down); the side flown shall be recorded at launch, and the mid-swing checkpoint shall explain that side (behind: the pull drags you along; in front: the pull tugs you backwards, so this side slows you down). Try the other side shall reset the flight to "Your turn" with a "Now try the other side" prompt.
 
-**Verification.** TOUR-001 to 006, TOUR-011 to TOUR-014 are covered by `tests/tour.test.js`, including a check against the real physics that "Your turn" can be completed. TOUR-007 to 010 are camera, canvas, CSS and wiring in `main.js`, verified by hand on desktop and phone.
+## Verified by hand
+
+The tour's rules live in the pure `site/cockpit/tour.js` and are covered by `tests/tour.test.js`, including checks against the real physics. These four are camera moves, canvas highlights and event wiring in `site/cockpit/main.js`, checked by playing the tutorial on the dev site: `TOUR-007`, `TOUR-008`, `TOUR-009`, `TOUR-010`.

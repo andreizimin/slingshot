@@ -28,7 +28,7 @@ The simulation uses real-world-range values: star and planet masses of real bodi
 
 ### Static site, no build step
 
-The game is `index.html` plus plain JavaScript ES modules, served as static files. Nothing is compiled. The only tooling is Node's built-in test runner and the deploy tool.
+The game is `index.html` plus plain JavaScript ES modules, served as static files. Nothing is compiled. The only tooling is Node's built-in test runner, a coherence check, and the deploy pipeline.
 
 ## Target Users
 
@@ -40,7 +40,7 @@ The game is `index.html` plus plain JavaScript ES modules, served as static file
 1. A tester can reliably produce a speed **boost** by passing behind the planet and a **brake** by passing in front.
 2. The flyby acceptance test passes: in the planet's frame, the ship's exit speed equals its entry speed within a tight tolerance.
 3. Changing the time-control setting does not change the trajectory.
-4. The slice is live at `slingshot.andreizimin.com`.
+4. The slice is live at `slingshot.andreizimin.com`, and every change reaches it through the dev site at `slingshot-dev.andreizimin.com`.
 
 ## Non-Goals
 
@@ -70,17 +70,21 @@ flowchart LR
   end
   Tests[node --test, in CI on every push] --> Sim
   Tests --> Cockpit
-  Hosting[Static hosting\nS3 + CloudFront via SST] -. serves .-> Browser
+  Pipeline[Pipeline\nGitHub Actions] -- branch --> Dev[slingshot-dev\nS3 + CloudFront via SST]
+  Pipeline -- main --> Prod[slingshot\nS3 + CloudFront via SST]
+  Prod -. serves .-> Browser
+  Dev -. serves the requester's check .-> Browser
 ```
 
 | Component | Role | LLD |
 |---|---|---|
 | Flight sim | Bodies, gravity, symplectic integrator, fixed-step time advance, thrust and fuel, prediction line, speed in the star's and planet's frames. No DOM. | `docs/intent/flight-sim/` |
 | Cockpit | Canvas rendering with storybook proportions, keyboard, mouse and touch controls, speed readout and arrows, fuel display, time controls. Drives the sim each animation frame. Its decisions live in a pure, tested module (`view.js`). | `docs/intent/cockpit/` |
-| Getting-started tour | First-visit guided walk over the frozen game: camera moves, caption cards, then the player plans and flies a first boost. Replay from the ? button. | `docs/intent/tour/` |
+| Getting-started tour | The game's front door, on every load: a guided walk over the frozen game (camera moves, caption cards), then the player plans and flies a pass on either side, behind for a boost or in front for a brake, and ends with I'm ready into free flight. The ? button restarts it. | `docs/intent/tour/` |
 | Analytics | Shared Umami tag and cookieless flight and tour events. | `docs/intent/analytics/` |
 | Feedback | Shared feedback widget, and keeping game keys out of its form. | `docs/intent/feedback/` |
-| Hosting | Static deploy of the site to the subdomain, and CI. | `docs/intent/hosting/` |
+| Hosting | Two stages, production (`slingshot.andreizimin.com`) and dev (`slingshot-dev.andreizimin.com`), deployed by a pipeline that tests every push and checks the live site after each deploy. | `docs/intent/hosting/` |
+| LID | How the project changes: vendored LID skills, change orders, and the coherence check. | `docs/intent/lid/` |
 
 The cockpit depends on the flight sim; the flight sim depends on nothing. Visual sizes live only in the cockpit and never reach the gravity calculation.
 
@@ -93,7 +97,20 @@ The cockpit depends on the flight sim; the flight sim depends on nothing. Visual
 | Integrator | Velocity Verlet with a fixed step | Euler; RK4; adaptive step | Verlet is symplectic, so orbits don't spiral and flyby speed is conserved in the planet's frame. Euler gains energy. RK4 drifts over long runs. An adaptive step would make time control and prediction harder to keep identical. |
 | Planet motion | Prescribed circular orbit (position is a function of time) | Integrate the planet under the star's gravity | A prescribed orbit can't drift, keeps the scenario reproducible, and the planet's velocity is exact. The ship feels both bodies' gravity; the planet feels nothing. |
 | On-screen proportions | Ship and planets drawn at comparable sizes, decoupled from physical radius | True scale; uniformly scaled-up bodies | At true scale the ship is invisible and the planet is a speck next to its orbit. Decoupling drawn size from physics lets the picture be readable without changing a single trajectory. |
-| Hosting | AWS S3 + CloudFront with a Route 53 subdomain, provisioned by SST `StaticSite` | Cloudflare, Vercel, GitHub Pages | Matches the developer's existing AWS setup for the parent domain, so DNS and certificates come from the same zone. |
+| Hosting | AWS S3 + CloudFront with Route 53 subdomains, provisioned by SST `StaticSite` | Cloudflare, Vercel, GitHub Pages | Matches the developer's existing AWS setup for the parent domain, so DNS and certificates come from the same zone. |
+| How changes ship | Change order → branch → pipeline to dev → one check by the requester → merge deploys production | Deploying from the developer's laptop after a local review | One path that cannot be done out of order: nothing reaches players untested, unchecked on dev, or without a record of what it was meant to change. |
+
+## Change Flow
+
+Every change, whether a feature, a bug or a minor fix, follows the same path:
+
+1. **Change order.** A document in `docs/change-orders/` predicts what the change will touch at every level of the arrow of intent (this HLD, the LLDs, specs, tests, code), and asks the requester any decisions in one round.
+2. **Branch.** The work happens on a branch named after its Linear ticket and walks the arrow: design docs, specs, failing tests, then code.
+3. **Pipeline to dev.** Pushing the branch runs the tests and the coherence check, deploys to `slingshot-dev.andreizimin.com`, and checks the live dev site against the commit.
+4. **The one manual step.** The requester checks that commit on dev and says so explicitly.
+5. **Production.** Merging into `main` deploys `slingshot.andreizimin.com` and checks the live site. The change order's Outcome records what was actually touched against what was predicted.
+
+The process is specified in `AGENTS.md` and the `lid` node; the pipeline in the `hosting` node.
 
 ## Release Stages
 
@@ -102,7 +119,7 @@ The cockpit depends on the flight sim; the flight sim depends on nothing. Visual
 | **MVP** ✅ | The first vertical slice is live, the physics acceptance tests pass, and a tester can produce a boost and a brake. |
 | **Beta** ✅ | Everything in the MVP, plus: **Umami analytics** (cookieless, with no personal data, because the players are children); the **shared feedback widget** embedded with this project's identifier; a **Linear project** linked, with work tracked as tickets on branches; **automated cockpit tests** alongside the sim tests; and **CI** running `npm test` on every push. |
 
-Work is tracked in the Linear project **Slingshot** (team ZZF).
+Work is tracked in the Linear project **Slingshot** (team ZZF), one ticket and one change order per change.
 
 ## Success Metrics
 
@@ -113,4 +130,6 @@ Work is tracked in the Linear project **Slingshot** (team ZZF).
 ## References
 
 - `docs/slingshot-context.md`: Lily Pond concept brief, physics ground rules, reference numbers.
+- `docs/change-orders/`: one change order per change, predicted against actual.
+- `docs/development-log.md`: how the game was built.
 - EARS syntax: https://alistairmavin.com/ears/

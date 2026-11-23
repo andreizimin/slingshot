@@ -181,7 +181,7 @@ test('coasting from the default start crashes', () => {
   assert.ok(dist(s) < sim.PLANET_RADIUS);
 });
 
-// @spec SIM-TIME-002, SIM-TIME-003
+// @spec SIM-TIME-001, SIM-TIME-002, SIM-TIME-003
 test('stepsForFrame converts real time with carry and clamps', () => {
   assert.deepEqual(sim.RATES, { paused: 0, slow: 200, normal: 800, fast: 3300 });
   let r = sim.stepsForFrame('normal', 1 / 60, 0);
@@ -294,4 +294,66 @@ test('burning to pass in front of the planet brakes star-frame speed', () => {
   const s = burnHalfThenCoast('up');
   assert.equal(s.status, 'departed');
   assert.ok(sim.speedChange(s) < 0, `change ${sim.speedChange(s)}`);
+});
+
+// @spec SIM-001
+test('flight-sim modules touch no browser global and import only relative .js files', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../site/sim/', import.meta.url);
+  const names = readdirSync(dir).filter((n) => n.endsWith('.js'));
+  assert.ok(names.length >= 1);
+  for (const name of names) {
+    const code = readFileSync(new URL(name, dir), 'utf8').replace(/\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /\b(window|document|navigator|localStorage|HTMLCanvasElement|requestAnimationFrame)\b/, `${name} uses a browser global`);
+    for (const m of code.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)) {
+      assert.match(m[1], /^\.{1,2}\/.+\.js$/, `${name} imports "${m[1]}"`);
+    }
+  }
+});
+
+// @spec SIM-SCN-001
+test('scenario constants are the real-world values, in km, s and km³/s²', () => {
+  assert.equal(sim.STAR_GM, 1.32712e11);
+  assert.equal(sim.PLANET_GM, 1.26687e8);
+  assert.equal(sim.PLANET_RADIUS, 71492);
+  assert.equal(sim.ORBIT_RADIUS, 7.785e8);
+  assert.equal(sim.DT, 30);
+});
+
+// @spec SIM-STEP-002
+test('gravity is the sum of the inverse-square pulls of the star and the planet', () => {
+  const t = 5000;
+  const p = sim.planetPosition(t);
+  const x = p.x - 3.0e5;
+  const y = p.y + 4.0e5; // 5e5 km from the planet
+  const g = sim.gravity(x, y, t);
+  const rs = Math.hypot(x, y);
+  const rp = 5.0e5;
+  const expected = {
+    x: (-sim.STAR_GM * x) / rs ** 3 - (sim.PLANET_GM * (x - p.x)) / rp ** 3,
+    y: (-sim.STAR_GM * y) / rs ** 3 - (sim.PLANET_GM * (y - p.y)) / rp ** 3,
+  };
+  close(g.x, expected.x, 1e-15);
+  close(g.y, expected.y, 1e-15);
+  // The planet's pull at 5e5 km is GM/r², pointing at the planet.
+  const planetPull = Math.hypot(g.x + (sim.STAR_GM * x) / rs ** 3, g.y + (sim.STAR_GM * y) / rs ** 3);
+  close(planetPull, sim.PLANET_GM / rp ** 2, 1e-12);
+});
+
+// @spec SIM-END-002
+test('a flight departs only after a close pass, once back beyond the start distance', () => {
+  // A close pass: plan a swing behind, fly it, and it ends as departed, far out.
+  let s = sim.planningBurn(sim.initialState(), 'down', 3);
+  for (let i = 0; i < 80000 && s.status === 'flying'; i++) s = sim.step(s, null);
+  assert.equal(s.status, 'departed');
+  assert.ok(dist(s) > sim.START_DISTANCE);
+  assert.ok(s.closest < sim.START_DISTANCE / 2);
+  // Drifting away without ever coming close is not a departure.
+  const p = sim.planetPosition(0);
+  const pv = sim.planetVelocity(0);
+  const pos = { x: p.x - 4.2e6, y: p.y };
+  let away = { ...sim.initialState(), pos, vel: { x: pv.x - 20, y: pv.y }, grav: sim.gravity(pos.x, pos.y, 0), closest: 4.2e6 };
+  for (let i = 0; i < 2000; i++) away = sim.step(away, null);
+  assert.ok(dist(away) > sim.START_DISTANCE);
+  assert.equal(away.status, 'flying');
 });

@@ -3,6 +3,24 @@ import * as sim from '../sim/physics.js';
 import * as view from './view.js';
 import { track } from './analytics.js';
 import * as tours from './tour.js';
+import { stageMarks } from './stage.js';
+
+// Everywhere but production: a DEV badge, and a request to search engines not to index.
+// @spec HOST-012
+(function markStage() {
+  const marks = stageMarks(window.location.hostname);
+  const badge = document.getElementById('stage-badge');
+  if (marks.badge && badge) {
+    badge.textContent = marks.badge;
+    badge.hidden = false;
+  }
+  if (marks.noindex) {
+    const meta = document.createElement('meta');
+    meta.name = 'robots';
+    meta.content = 'noindex';
+    document.head.appendChild(meta);
+  }
+})();
 
 const canvas = document.getElementById('view');
 const ctx = canvas.getContext('2d');

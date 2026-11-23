@@ -2,7 +2,7 @@
 
 Design: `cockpit-design.md` · Prefix: `COCKPIT`
 
-**Verification.** Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `tests/cockpit.test.js` (CAM-002, CAM-005, DRAW-002, DRAW-005, DRAW-010, CTL-009, HUD-002, HUD-003, HUD-007, MSG-001 to 003, MOB-002, PRED-002, TUNE-001). The rest describe canvas drawing, browser input wiring and CSS layout in `main.js` and `style.css`, which need a real browser; they are verified by hands-on play-testing on desktop and phone before each deploy.
+Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `tests/cockpit.test.js`. The rest are listed under **Verified by hand** at the end.
 
 ## Camera and drawing
 
@@ -61,16 +61,28 @@ Design: `cockpit-design.md` · Prefix: `COCKPIT`
 - [x] **COCKPIT-HUD-007**: While a plan exists, the fuel bar shall show the fuel left after the plan as the solid fill and the plan's cost as a striped section up to the current fuel.
 - [x] **COCKPIT-CTL-007**: When the page loads, the cockpit shall start paused in the ready state with Normal as the setting to resume to.
 
-- [ ] **COCKPIT-CTL-009**: While a pointer (touch, mouse or pen) pressed on the canvas is more than 24 px from its press point, and no keyboard arrow is held, the cockpit shall use the vertical part of the drag as the push (drag up → `'up'`, drag down → `'down'`; horizontal movement is ignored, since only sideways speed can be changed), in both running and paused-planning modes.
-- [ ] **COCKPIT-CTL-010**: When the dragging pointer is released or cancelled, or the window loses focus, the cockpit shall stop the drag thrust.
-- [ ] **COCKPIT-DRAW-007**: While a drag is active, the cockpit shall draw a faint ring at the press point and an arrow from the press point to the pointer.
+- [x] **COCKPIT-CTL-009**: While a pointer (touch, mouse or pen) pressed on the canvas is more than 24 px from its press point, and no keyboard arrow is held, the cockpit shall use the vertical part of the drag as the push (drag up → `'up'`, drag down → `'down'`; horizontal movement is ignored, since only sideways speed can be changed), in both running and paused-planning modes.
+- [x] **COCKPIT-CTL-010**: When the dragging pointer is released or cancelled, or the window loses focus, the cockpit shall stop the drag thrust.
+- [x] **COCKPIT-DRAW-007**: While a drag is active, the cockpit shall draw a faint ring at the press point and an arrow from the press point to the pointer.
 
 ## Phones and touch screens
 
-- [ ] **COCKPIT-MOB-001**: The cockpit shall set `touch-action: none` on the game surface so touch drags never scroll or zoom the page.
-- [ ] **COCKPIT-MOB-002**: Where the primary pointer is coarse (touch-first device), the cockpit shall show the help line "Drag to push · buttons: speed" and the ready message "Drag up or down to pick a side, then tap Normal to go."
-- [ ] **COCKPIT-MOB-003**: Where the viewport is narrower than 600 px, the cockpit shall shrink the speed number to 40 px, narrow the fuel bar to 110 px, hide the help line, and fit all four time buttons on one row at least 44 px tall, with message cards no wider than the viewport minus 32 px.
+- [x] **COCKPIT-MOB-001**: The cockpit shall set `touch-action: none` on the game surface so touch drags never scroll or zoom the page.
+- [x] **COCKPIT-MOB-002**: Where the primary pointer is coarse (touch-first device), the cockpit shall show the help line "Drag to push · buttons: speed" and the ready message "Drag up or down to pick a side, then tap Normal to go."
+- [x] **COCKPIT-MOB-003**: Where the viewport is narrower than 600 px, the cockpit shall shrink the speed number to 40 px, narrow the fuel bar to 110 px, hide the help line, and fit all four time buttons on one row at least 44 px tall, with message cards no wider than the viewport minus 32 px.
 
 ## Frame loop
 
 - [x] **COCKPIT-LOOP-001**: On each animation frame, the cockpit shall compute steps with `stepsForFrame` from the real time elapsed since the previous frame, call `advance` with that count and the current thrust direction, then draw.
+
+## Verified by hand
+
+These describe canvas drawing, browser input wiring and the frame loop in `site/cockpit/main.js` and `site/style.css`. `node --test` has no browser, so they are checked by playing the game on the dev site, on a desktop and a phone, before each merge:
+
+- Camera and canvas: `COCKPIT-CAM-001`, `COCKPIT-CAM-003`, `COCKPIT-CAM-004`
+- Drawing: `COCKPIT-DRAW-001`, `COCKPIT-DRAW-003`, `COCKPIT-DRAW-004`, `COCKPIT-DRAW-006`, `COCKPIT-DRAW-007`, `COCKPIT-DRAW-008`, `COCKPIT-DRAW-009`
+- Trail and prediction: `COCKPIT-TRAIL-001`, `COCKPIT-TRAIL-002`, `COCKPIT-PRED-001`, `COCKPIT-PRED-003`
+- Readouts: `COCKPIT-HUD-001`, `COCKPIT-HUD-004`, `COCKPIT-HUD-005`, `COCKPIT-HUD-006`
+- Controls: `COCKPIT-CTL-001`, `COCKPIT-CTL-002`, `COCKPIT-CTL-003`, `COCKPIT-CTL-004`, `COCKPIT-CTL-005`, `COCKPIT-CTL-006`, `COCKPIT-CTL-007`, `COCKPIT-CTL-008`, `COCKPIT-CTL-010`, `COCKPIT-CTL-011`
+- Phones: `COCKPIT-MOB-001`, `COCKPIT-MOB-003`
+- Frame loop: `COCKPIT-LOOP-001`
