@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | Type | Feature |
-| Status | In progress |
+| Status | Done |
 | Requested | 2026-11-23 |
 | Approved | 2026-11-23 |
-| Completed | |
+| Completed | 2026-11-23 |
 | Ticket | [ZZF-89](https://linear.app/zizify-workshop/issue/ZZF-89) |
 
 ## Request
@@ -138,30 +138,38 @@ None open. Decided on 2026-11-23:
 
 ## Outcome
 
-Filled in after the change is complete.
-
 ### Predicted vs Actual
 
 | Level | Predicted | Actual | Notes |
 |---|---|---|---|
-| HLD | 3 changes | | |
-| LLDs | 6 sections (hosting), 1 new LLD (lid) | | |
-| Specs | +6 ~4 −0 | | |
-| Tests | 4 files | | |
-| Code | 10 files | | |
+| HLD | 3 changes | 5 changes | As predicted: Hosting row and diagram, a new Change Flow section, References. Also: a key decision row for how changes ship, and the getting-started tour row corrected (it still said "first visit only, boost only"). |
+| LLDs | 6 sections (hosting), 1 new LLD (lid) | hosting rewritten (8 sections), new `lid` LLD | The hosting design was rewritten end to end rather than patched: stages and domains, dev stage, pipeline, fallback, decisions. |
+| Specs | +6 ~4 −0 | +8 ~7 −0 | Added HOST-012..017 as predicted, plus HOST-017 (OIDC-only credentials) split out of HOST-015, and the `lid` node grew to LID-001..007 (predicted as one spec). Revised HOST-004, 006, 010, 011 as predicted, plus HOST-007 (wait for invalidation), HOST-009 (any stage's first deploy), LID-003/LID-004 wording after review. 6 shipped cockpit specs were ticked from `[ ]` to `[x]`. |
+| Tests | 4 files | 5 files | `tests/hosting.test.js`, `tests/stage.test.js`, `tests/coherence.test.js` added; `tests/cockpit.test.js` lost its CI test; `tests/sim.test.js` gained 4 tests for flight-sim specs the coherence check found untested. |
+| Code | 10 files | 11 files | As predicted, plus `deploy/hosting.mjs` (the domain rule, kept testable). |
 
 ### Surprises
+
+1. **The coherence check's first run found 41 problems.** 31 were cockpit, tour, feedback and analytics specs that are genuinely browser or person-checked; they are now listed under "Verified by hand" in their spec files. 5 flight-sim specs had no test and got one. 6 cockpit specs (drag, phone layout) had shipped but were never ticked off. 3 were the checker's own test fixtures looking like real annotations.
+2. **A mislabelled prediction.** This change order's Predicted Impact calls `AWS_ROLE_ARN` a repository *variable*. It was set up, correctly, as a *secret*: the repository and its Actions logs are public, and the ARN carries the account ID. The prediction is left as approved; the design, spec HOST-017 and a test all say secret.
+3. **The live check needed the CDN to settle.** Without `invalidation.wait`, a deploy can finish before CloudFront serves the new files. The deploy now waits, and the check retries for up to three minutes as a second guard.
+4. **Reviews found 7 real problems before the dev check:** the variable/secret slip above; the hosting design claiming the test job runs `npm ci`; the coherence check rejecting the `decisions/` folder that `AGENTS.md` itself prescribes; the HLD's stale tour description; the change-order README disagreeing with `AGENTS.md` about when *Done* is written; and a loophole where any spec ID merely mentioned in prose under "Verified by hand" counted as hand-verified. All fixed. Ten other claims were refuted by skeptic verifiers.
+5. **The first push's commit had the wrong co-author line.** Its run was cancelled before the deploy step and the commit amended.
 
 ### Commits
 
 | Hash | Message |
 |---|---|
+| `8cd1008` | CO-001: dev environment, change orders, CI/CD pipeline and LID finalized (ZZF-89) |
+| (next) | CO-001: review fixes and Outcome |
 
 ### Measurements
 
 | | |
 |---|---|
-| Tests before → after | unit 59 → |
-| Lines changed | |
-| Agent time | |
-| Deployed | |
+| Tests before → after | unit 59 → 82 |
+| Specs | 113 → 126, all tested or listed as hand-verified |
+| Lines changed | +408 −24 (code), +354 −11 (tests), +661 −75 (docs), plus 15 vendored skill files |
+| Pipeline | First branch push: tests, coherence, dev deploy and live check all passed with no laptop step |
+| Agent time | about 1.5 hours |
+| Deployed | dev 2026-11-23; production on merge |

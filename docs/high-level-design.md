@@ -80,7 +80,7 @@ flowchart LR
 |---|---|---|
 | Flight sim | Bodies, gravity, symplectic integrator, fixed-step time advance, thrust and fuel, prediction line, speed in the star's and planet's frames. No DOM. | `docs/intent/flight-sim/` |
 | Cockpit | Canvas rendering with storybook proportions, keyboard, mouse and touch controls, speed readout and arrows, fuel display, time controls. Drives the sim each animation frame. Its decisions live in a pure, tested module (`view.js`). | `docs/intent/cockpit/` |
-| Getting-started tour | First-visit guided walk over the frozen game: camera moves, caption cards, then the player plans and flies a first boost. Replay from the ? button. | `docs/intent/tour/` |
+| Getting-started tour | The game's front door, on every load: a guided walk over the frozen game (camera moves, caption cards), then the player plans and flies a pass on either side, behind for a boost or in front for a brake, and ends with I'm ready into free flight. The ? button restarts it. | `docs/intent/tour/` |
 | Analytics | Shared Umami tag and cookieless flight and tour events. | `docs/intent/analytics/` |
 | Feedback | Shared feedback widget, and keeping game keys out of its form. | `docs/intent/feedback/` |
 | Hosting | Two stages, production (`slingshot.andreizimin.com`) and dev (`slingshot-dev.andreizimin.com`), deployed by a pipeline that tests every push and checks the live site after each deploy. | `docs/intent/hosting/` |

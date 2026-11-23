@@ -8,8 +8,10 @@ Every change to Slingshot (feature, bug or minor fix) starts as a change order. 
 2. **Change order.** A new `CO-NNN-short-slug.md` is written from [TEMPLATE.md](TEMPLATE.md) with status *Proposed*. It covers the predicted impact at every level, cross-segment effects, decisions needed, risks and the verification plan. No design doc, spec, test or code changes before this.
 3. **Decisions.** If the change order has Decisions Needed, they are asked all at once, in one round, with a recommendation first. With the answers recorded, it is *Approved*.
 4. **Work.** On a branch named after the ticket, the change walks the LID arrow as predicted, with no further stops. When the work departs from the prediction, the change order is updated rather than the departure going unrecorded.
-5. **Dev.** Pushing the branch runs the tests and the coherence check, deploys to `slingshot-dev.andreizimin.com` and runs the live-site check. The Outcome is filled in before the requester checks dev.
-6. **The one manual step.** The requester checks the reported commit on dev and says so explicitly. Merging into `main` then deploys production and runs the live-site check there. Status becomes *Done* and the row below is updated.
+5. **Dev.** Pushing the branch runs the tests and the coherence check, deploys to `slingshot-dev.andreizimin.com` and runs the live-site check.
+6. **The one manual step.** The requester checks the reported commit on dev and says so explicitly. Merging into `main` then deploys production and runs the live-site check there.
+
+The Outcome, the status *Done* and the row below are written before the dev check (step 5), so nothing is left to commit after the merge; the status takes effect when the merge lands, and is set back if the requester sends the change back.
 
 ## Numbering
 
@@ -21,4 +23,4 @@ Changes before CO-001 (the MVP, beta, getting-started tour and tutorial, tickets
 
 | ID | Title | Type | Status | Specs predicted | Specs actual |
 |---|---|---|---|---|---|
-| [CO-001](CO-001-dev-env-change-orders-lid.md) | Dev environment, change orders, CI/CD and LID finalized ([ZZF-89](https://linear.app/zizify-workshop/issue/ZZF-89)) | Feature | In progress | +6 ~4 | |
+| [CO-001](CO-001-dev-env-change-orders-lid.md) | Dev environment, change orders, CI/CD and LID finalized ([ZZF-89](https://linear.app/zizify-workshop/issue/ZZF-89)) | Feature | Done | +6 ~4 | +8 ~7 |

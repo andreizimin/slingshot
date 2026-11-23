@@ -62,7 +62,7 @@ The shared feedback widget already labels submissions from a hostname containing
 
 `.github/workflows/ci.yml` runs on every push:
 
-1. **Test.** `npm ci`, `npm test`, and the coherence check (`npm run coherence`). Pull requests from forks get this job only.
+1. **Test.** `npm test` and the coherence check (`npm run coherence`). Both use only Node's built-ins, so the test job installs nothing. Pull requests from forks get this job only.
 2. **Deploy.** If the tests pass, the push deploys with `sst deploy --stage <stage>`: `main` to `production`, any other branch to `dev`.
 3. **Live-site check.** `scripts/live-check.mjs` fetches every file under `site/` from the deployed address and fails the run unless each one answers 200, is served `no-cache`, matches the committed file byte for byte, and (for `.js`) has a JavaScript content type; the page must also carry the Umami and feedback tags. It retries for up to three minutes while a new deploy propagates.
 

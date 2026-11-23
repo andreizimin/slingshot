@@ -32,8 +32,8 @@ The steps, the single manual stop (the requester's check on dev) and the explici
 1. **An annotation names no spec.** A `@spec` ID that no spec file defines.
 2. **A spec ID is defined twice**, in one file or across files.
 3. **A spec ID has the wrong prefix.** Every ID in a node's spec file must start with the `prefix:` its design doc declares, followed by a hyphen.
-4. **An implemented spec is unverified.** A spec marked `[x]` that no file in `tests/` cites, unless its spec file lists it under a **Verified by hand** heading. That heading is where a spec file says, in plain words, which specs need a browser or a person and why.
-5. **A node is malformed.** A folder under `docs/intent/` without its `<node>-design.md`, or a design doc without `parent:` and `prefix:` frontmatter.
+4. **An implemented spec is unverified.** A spec marked `[x]` that no file in `tests/` cites, unless its spec file lists it, written in backticks, under a **Verified by hand** heading (a plain mention in prose there does not count). That heading is where a spec file says, in plain words, which specs need a browser or a person and why.
+5. **A node is malformed.** A folder under `docs/intent/` without its `<node>-design.md`, or a design doc without `parent:` and `prefix:` frontmatter. A `decisions/` folder (where a node keeps its decision docs) is not a node.
 
 Specs marked `[ ]` (active gap) or `[D]` (deferred) need no test. The script has no dependencies and its logic is a pure function over file contents, so it is unit-tested on small fixtures. It runs in the pipeline's test job, so a push that breaks the chain does not deploy.
 

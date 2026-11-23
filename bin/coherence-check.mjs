@@ -35,7 +35,8 @@ function handVerified(text) {
   let inside = false;
   for (const line of text.split('\n')) {
     if (/^#{1,6}\s/.test(line)) inside = /^#{1,6}\s*Verified by hand\b/i.test(line);
-    else if (inside) for (const id of line.match(ID) ?? []) ids.add(id);
+    // Only IDs written as code (`ID`) count, so prose like "X-001 still needs a test" does not.
+    else if (inside) for (const m of line.matchAll(/`([^`]+)`/g)) for (const id of m[1].match(ID) ?? []) ids.add(id);
   }
   return ids;
 }
@@ -51,6 +52,8 @@ export function checkCoherence(files) {
     const m = /^(docs\/intent\/(?:[^/]+\/)*([^/]+))\/([^/]+)$/.exec(path);
     if (!m) continue;
     const [, dir, name, file] = m;
+    // Decision docs live in a node's decisions/ folder; that folder is not a node itself.
+    if (dir.split('/').includes('decisions')) continue;
     const node = nodes.get(dir) ?? { name, design: null, specs: null };
     if (file === `${name}-design.md`) node.design = path;
     if (file === `${name}-specs.md`) node.specs = path;

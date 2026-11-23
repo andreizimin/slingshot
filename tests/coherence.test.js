@@ -62,6 +62,8 @@ test('IDs must carry their node prefix, and every node needs a well-formed desig
   assert.match(problemsFor((f) => { delete f['docs/intent/engine/engine-design.md']; }), /docs\/intent\/engine: no engine-design\.md/);
   assert.match(problemsFor((f) => { f['docs/intent/engine/engine-design.md'] = design(null); }), /engine-design\.md: no "prefix:" in frontmatter/);
   assert.match(problemsFor((f) => { f['docs/intent/engine/engine-design.md'] = '# No frontmatter\n'; }), /engine-design\.md: no "parent:" in frontmatter/);
+  // A node's decisions/ folder holds decision docs and is not a node.
+  assert.equal(problemsFor((f) => { f['docs/intent/engine/decisions/001-choice.md'] = '# A choice\n'; }), '');
 });
 
 // @spec LID-004
@@ -69,6 +71,10 @@ test('an implemented spec must be cited by a test or listed as verified by hand'
   assert.match(problemsFor((f) => { f['tests/engine.test.js'] = "test('nothing', () => {});\n"; }), /ENG-001 is marked \[x\] but no test cites it/);
   assert.match(problemsFor((f) => {
     f['docs/intent/engine/engine-specs.md'] = f['docs/intent/engine/engine-specs.md'].replace('`ENG-002`', 'nothing');
+  }), /ENG-002 is marked \[x\] but no test cites it/);
+  // A mention in prose under the heading is not a listing; only backticked IDs count.
+  assert.match(problemsFor((f) => {
+    f['docs/intent/engine/engine-specs.md'] = f['docs/intent/engine/engine-specs.md'].replace('`ENG-002`', 'none yet; ENG-002 still needs a test');
   }), /ENG-002 is marked \[x\] but no test cites it/);
   // A citation in site/ alone is not a test; gaps and deferred specs need nothing.
   const result = checkCoherence(good());
