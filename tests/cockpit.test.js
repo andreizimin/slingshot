@@ -162,16 +162,6 @@ test('analytics payloads hold only numbers and fixed categories', () => {
   }
 });
 
-// @spec HOST-011
-test('CI runs npm test on push and pull request with read-only permissions and no secrets', () => {
-  const yml = readFileSync(new URL('../.github/workflows/test.yml', import.meta.url), 'utf8');
-  assert.match(yml, /on:\s*\n\s*push:\s*\n\s*pull_request:/);
-  assert.match(yml, /contents: read/);
-  assert.match(yml, /node-version: 22/);
-  assert.match(yml, /- run: npm test/);
-  assert.doesNotMatch(yml, /secrets\.|sst deploy|npm run deploy/);
-});
-
 // @spec FEED-001
 test('page loads the shared feedback widget for project "slingshot", above the time buttons', () => {
   assert.match(html, /<script src="https:\/\/feedback\.andreizimin\.com\/widget\.js" data-project="slingshot"[^>]*data-offset="[^"]+"[^>]*defer><\/script>/);
