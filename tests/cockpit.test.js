@@ -182,3 +182,23 @@ test('destination marker: ring at true scale but at least 30 px; label with name
   assert.equal(view.destinationLabel('Haven', 12_349_000), 'Haven · 12.3M km');
   assert.equal(view.destinationLabel('Haven', 950_000), 'Haven · 1.0M km');
 });
+
+// @spec COCKPIT-CAM-007
+test('while a card is shown the camera frames the play area above it', () => {
+  const W = 1316, H = 809, cardTop = 540;
+  assert.deepEqual(view.playCentre(W, H), [658, 404.5], 'no card: the whole canvas');
+  assert.deepEqual(view.playCentre(W, H, cardTop), [658, 360], 'between the top readouts (180) and the card');
+  assert.deepEqual(view.playCentre(390, 780, 500), [195, 310], 'phones: readouts end at 120');
+  const below = { x: 0, y: -1e6 }; // ship below the planet: limited by the margin above the card
+  const inset = view.targetScale(below, W, H, cardTop);
+  assert.ok(inset > view.targetScale(below, W, H), 'zooms out to keep the ship above the card');
+  assert.ok(Math.abs(inset - 1e6 / (cardTop - 360 - 110)) < 1e-6, `bottom margin from the card (${inset})`);
+  const above = { x: 0, y: 1e6 };
+  assert.ok(view.targetScale(above, W, H, cardTop) >= 1e6 / (360 - 170), 'ship kept 170 px below the canvas top');
+});
+
+// @spec ANA-008
+test('start-screen choice event carries only the choice', () => {
+  assert.deepEqual(view.choiceEvent('tutorial'), { name: 'start_choice', data: { choice: 'tutorial' } });
+  assert.deepEqual(view.choiceEvent('mission'), { name: 'start_choice', data: { choice: 'mission' } });
+});

@@ -7,6 +7,7 @@
 // advance: 'tap' (Next), 'planSide' (a plan that clears the planet on either side), 'running'
 // (play pressed), 'resume' (the mid-swing checkpoint), 'end' (the flight's result).
 // @spec TOUR-001
+// @spec TOUR-002 — start() is where Tutorial and the ? button both begin.
 export const STEPS = [
   {
     id: 'ship', focus: 'ship', zoom: 'close', target: 'ship', advance: 'tap', destination: true,
@@ -19,24 +20,14 @@ export const STEPS = [
     text: 'The planet races around its star at 13 km/s. Swing close behind it and its gravity drags you along, lending you speed for free. Pass in front of it, and it slows you down instead.',
   },
   {
-    id: 'speed', focus: 'planet', target: 'hud-speed', advance: 'tap',
+    id: 'speed', focus: 'planet', target: 'hud-speed', ring: 'arrows', advance: 'tap',
     title: 'Your speed',
-    text: 'This is how fast you are flying. Watch it: the planet can push this number up, or pull it down.',
+    text: 'This is how fast you are flying: the planet can push it up, or pull it down. Grey arrow: your speed toward the planet, which gravity controls. Orange arrow: your sideways speed, the one you steer.',
   },
   {
-    id: 'arrows', focus: 'planet', target: 'arrows', advance: 'tap',
-    title: 'Two kinds of speed',
-    text: 'Grey: your speed toward the planet. Gravity controls that one. Orange: your sideways speed. That is the one you steer.',
-  },
-  {
-    id: 'fuel', focus: 'planet', target: 'hud-fuel', advance: 'tap',
-    title: 'Fuel is scarce',
-    text: 'Pushing sideways burns fuel. Spend a little early and it goes a long way.',
-  },
-  {
-    id: 'plan', focus: 'planet', target: 'ship', advance: 'tap',
-    title: 'Plan while paused',
-    text: 'While the game is paused, drag up or down (or press ↑ ↓) to plan your course. The dashed line shows exactly where you will go. Planning is free.',
+    id: 'plan', focus: 'planet', target: 'hud-fuel', advance: 'tap',
+    title: 'Fuel, and planning is free',
+    text: 'Pushing sideways burns fuel, so a little early goes a long way. While paused, drag up or down (or press ↑ ↓) to plan: the dashed line shows exactly where you will go. Planning costs nothing until you fly.',
   },
   {
     id: 'try', focus: 'planet', target: 'ship', advance: 'planSide',
@@ -64,9 +55,26 @@ export const STEPS = [
 
 export const stepIndex = (id) => STEPS.findIndex((s) => s.id === id);
 
-// The tutorial is the game's front door: it always starts, the same way, on every load.
-// @spec TOUR-002
-export const startsOnLoad = () => true;
+// The start screen: every load opens here, offering the tutorial or the level.
+// @spec TOUR-015
+export const DOOR = {
+  title: 'Slingshot',
+  text: "Borrow speed from planets to reach places your fuel can't.",
+  choices: [
+    { id: 'tutorial', label: 'Tutorial' },
+    { id: 'mission', label: 'Sample mission' },
+  ],
+};
+// On the start screen only Enter acts (it chooses Tutorial); steering, play and R do nothing.
+export const doorKey = (key) => (key === 'Enter' ? 'tutorial' : null);
+
+// The card strip: centred above the time buttons, at most 640 px wide, 16 px from each side.
+// Returns the card's left edge, width and bottom edge in px (timeTop = top of the time buttons).
+// @spec TOUR-016
+export function cardStrip(W, timeTop) {
+  const width = Math.min(640, W - 32);
+  return { left: Math.round((W - width) / 2), width, bottom: timeTop - (W < 600 ? 68 : 16) };
+}
 
 export const start = () => ({ active: true, index: 0 });
 export const current = (tour) => (tour?.active ? STEPS[tour.index] : null);
@@ -210,7 +218,7 @@ export const signedKms = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)
 // @spec TOUR-006
 export function inputAllowed(step, kind) {
   if (!step) return true;
-  if (kind === 'push') return step.id === 'try' || step.id === 'fly';
+  if (kind === 'push') return step.id === 'plan' || step.id === 'try' || step.id === 'fly';
   if (kind === 'time') return step.id === 'fly' || step.id === 'swing' || step.id === 'result';
   return true;
 }

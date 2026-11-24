@@ -63,18 +63,27 @@ body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit
 .tuner input { width: 100%; accent-color: #22d3ee; }
 .tuner output { text-align: right; font-variant-numeric: tabular-nums; color: #67e8f9; }
 
+/* ---------- start screen (TOUR-015) ---------- */
+.door {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 7;
+  width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 28px 30px; text-align: center;
+  background: rgba(22, 33, 63, 0.97); border: 2px solid #fcd34d; border-radius: 22px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.door[hidden] { display: none; }
+.door-title { margin: 0 0 8px; font-size: 44px; font-weight: 800; color: #fff; }
+.door-text { margin: 0 0 22px; font-size: 18px; line-height: 1.45; color: #e2e8f0; }
+.door-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
 /* ---------- getting-started tour ---------- */
 .tour-card {
-  position: fixed; z-index: 5; width: 340px; box-sizing: border-box; padding: 16px 18px 16px;
+  position: fixed; z-index: 5; width: 640px; box-sizing: border-box; padding: 16px 18px 16px;
   background: rgba(22, 33, 63, 0.97); border: 2px solid #fcd34d; border-radius: 18px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45); color: #f1f5f9;
   animation: tour-pop 220ms ease-out;
 }
 .tour-card[hidden] { display: none; }
 @keyframes tour-pop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.tour-card[data-anchor="hud-speed"] { left: 50%; top: 200px; margin-left: -170px; }
-.tour-card[data-anchor="hud-fuel"] { left: 32px; top: 104px; }
-.tour-card[data-anchor="hud-time"] { left: 50%; bottom: 112px; margin-left: -170px; }
 .tour-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .tour-count { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: #fcd34d; }
 .tour-skip { background: none; border: none; color: #94a3b8; font: 700 13px Nunito, system-ui, sans-serif; cursor: pointer; padding: 6px 4px; min-height: 32px; }
@@ -120,8 +129,10 @@ body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit
   .bar { height: 14px; }
   .help { display: none; }
   .tuner-toggle { right: 12px; bottom: 76px; width: 40px; height: 40px; }
-  /* Phones: the tour card docks above the time buttons, full width. */
-  .tour-card, .tour-card[data-anchor] { left: 12px !important; right: 12px; top: auto !important; bottom: calc(132px + env(safe-area-inset-bottom, 0px)); width: auto; margin-left: 0; padding: 14px 16px; }
+  /* Phones: the card strip is full width (placed by main.js, TOUR-016); a tighter card. */
+  .tour-card { padding: 14px 16px; }
+  .door { padding: 22px 20px; }
+  .door-title { font-size: 34px; }
   .tour-title { font-size: 19px; }
   .tour-text { font-size: 15px; margin-bottom: 10px; }
   .tour-replay { right: 12px; top: 16px; width: 36px; height: 36px; font-size: 18px; }

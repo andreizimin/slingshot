@@ -72,6 +72,12 @@ The tutorial now leads into the game itself: three drifting worlds with no star.
 
 **A green test suite can still ship a blank screen.** The cockpit has no unit tests in a browser, and a change in the prediction's format broke it on the first frame. A headless browser that reads the console now runs after every physics change.
 
+## 2026-11-24: CO-003 and CO-004, a Choice at the Door
+
+The first feedback from players through the widget was about the tutorial: its cards covered the game, and not everyone wants an interactive tutorial. The game now opens on a start screen offering Tutorial or Sample mission; the tutorial is eight steps instead of ten; and its card always docks in a strip above the time buttons, with the camera framing the scene above it. A third report, "the trajectory stays fixed", was a step that said "drag to plan" while steering was still locked. See [CO-003](change-orders/CO-003-onboarding-redesign.md) and [CO-004](change-orders/CO-004-trajectory-stays-fixed.md).
+
+**Layout bugs are found by looking.** Every unit test passed while the docked card pushed the ship into the speed readout on a 950-pixel-wide screen. Playing each step at the reporters' screen sizes found it, and the feedback button covering the card on phones, within minutes.
+
 ## Numbers
 
 | Milestone | Tests | Specs |
@@ -82,6 +88,7 @@ The tutorial now leads into the game itself: three drifting worlds with no star.
 | Tutorial | 59 | 113 |
 | CO-001 | 82 | 126 |
 | CO-002 | 108 | 156 |
+| CO-003 | 112 | 160 |
 
 Counted from the repository at each milestone's commit on `main`.
 

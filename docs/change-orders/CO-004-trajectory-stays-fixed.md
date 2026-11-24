@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | Type | Bug |
-| Status | Approved |
+| Status | Done |
 | Requested | 2026-11-24 |
 | Approved | 2026-11-24 |
-| Completed | |
+| Completed | 2026-11-24 |
 | Ticket | [ZZF-91](https://linear.app/zizify-workshop/issue/ZZF-91) |
 
 ## Request
@@ -79,3 +79,34 @@ Unlocking steering on step 6 lets players satisfy step 7 early; the step-7 condi
 ## Verification
 
 Repro on prod at 1316×809 before and after; tour tests; by hand on dev, desktop and phone.
+
+---
+
+## Outcome
+
+Delivered inside [CO-003](CO-003-onboarding-redesign.md), on its branch and in its commit.
+
+### Predicted vs Actual
+
+| Level | Predicted | Actual | Notes |
+|---|---|---|---|
+| HLD | None | None | |
+| LLDs | 2 sections (tour, cockpit) | 1 section (tour: Input During the Tour) | The no-fuel feedback (cause 2) was not needed: the cause was step 6's locked steering. |
+| Specs | +1 ~2 | +0 ~1 | TOUR-006 revised: steering is live on "Fuel, and planning is free" and "Your turn". No new COCKPIT-CTL spec. |
+| Tests | 2 files | 1 file | `tests/tour.test.js` (TOUR-006 now asserts steering on the planning step). |
+| Code | 2 files | 1 file | `site/cockpit/tour.js` (`inputAllowed`). |
+
+### Surprises
+
+The cause was confirmed by reading the code, so no reproduction on production was needed. Step 6 itself became step 4, "Fuel, and planning is free", in CO-003's 8-step script, and dragging there now moves the dashed line (checked in a browser).
+
+### Commits
+
+See CO-003.
+
+### Measurements
+
+| | |
+|---|---|
+| Tests before → after | counted in CO-003 |
+| Deployed | with CO-003 |

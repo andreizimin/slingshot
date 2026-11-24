@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | Type | Feature |
-| Status | Approved |
+| Status | Done |
 | Requested | 2026-11-24 |
 | Approved | 2026-11-24 |
-| Completed | |
+| Completed | 2026-11-24 |
 | Ticket | [ZZF-93](https://linear.app/zizify-workshop/issue/ZZF-93), [ZZF-90](https://linear.app/zizify-workshop/issue/ZZF-90) |
 
 ## Request
@@ -94,3 +94,40 @@ None open. Decided on 2026-11-24: 1a, 2a, 3a, 4a. CO-004 (ZZF-91) is delivered i
 ## Verification
 
 Unit tests for the script and choice; by hand on dev at 950×697, 1316×809 and a phone, every step, confirming no card covers its target or the planning line.
+
+---
+
+## Outcome
+
+### Predicted vs Actual
+
+| Level | Predicted | Actual | Notes |
+|---|---|---|---|
+| HLD | 1 change | 1 change | The tour's row now names the start screen. |
+| LLDs | 5 sections (tour ×3, cockpit, analytics) | 6 sections (tour ×4, cockpit, analytics) + 1 line in `level` | `level`'s "Entering" gained Sample mission, a cascade not predicted. |
+| Specs | +3 ~9 | +4 ~6 | Added TOUR-015, TOUR-016, COCKPIT-CAM-007, ANA-008 (the play area needed its own cockpit spec). Revised TOUR-001, 002, 004, 006, 007, 012. TOUR-013 was not revised: Skip tour still leads to the level, as it already did after CO-002. |
+| Tests | 2 files | 2 files | `tests/tour.test.js`, `tests/cockpit.test.js`; 4 new tests, 6 changed. |
+| Code | 5 files | 5 files | `tour.js`, `main.js`, `view.js`, `index.html`, `style.css`. `analytics.js` was predicted but untouched: the event builder lives in `view.js` like the others. |
+
+### Surprises
+
+- **The play area has a top too.** Docking the card shrank the play area from below, and centring the camera in what was left pushed the ship and the planet's motion arrow into the speed readout at 950×697. The play area now runs from below the top readouts (180 px; 120 on phones) to the card. Found by playing it in a browser, not by the tests.
+- **The feedback button overlaps the strip on phones.** The shared widget sits just above the time buttons, so on narrow screens the strip is lifted 52 px higher.
+- **Tight screens stay tight.** At 950×641 the planned sideways label on "Your turn" touches the card's top edge; the arrow itself stays clear. Acceptable for now; worth watching in play-testing.
+- **ZZF-91 needed no reproduction.** The code showed the cause directly: step 6 said "drag to plan" while steering was locked until step 7.
+
+### Commits
+
+| Hash | Message |
+|---|---|
+| `4738221` | CO-003, CO-004: change orders (ZZF-93, ZZF-90, ZZF-91) |
+| (this commit) | CO-003: start screen, docked tour card, 8-step tutorial, steering on the planning step |
+
+### Measurements
+
+| | |
+|---|---|
+| Tests before → after | unit 108 → 112 |
+| Lines changed | +141 −61 (code), +61 −9 (tests), +33 −27 (docs, excluding change orders) |
+| Agent time | about 1.5 hours |
+| Deployed | dev on push; production on merge |

@@ -51,7 +51,7 @@ A crash or getting lost earns no stars. Stars are decided from the exact fuel le
 
 ## Flow
 
-- **Entering.** The tutorial's last card, **I'm ready**, starts the level; so does **Skip tour**. The level opens paused, with a ready card: "Fly to Haven. You can't get there on fuel alone: chain slingshots, and arrive slowly enough to be caught."
+- **Entering.** **Sample mission** on the start screen starts the level; so do the tutorial's last card, **I'm ready**, and **Skip tour**. The level opens paused, with a ready card: "Fly to Haven. You can't get there on fuel alone: chain slingshots, and arrive slowly enough to be caught."
 - **Playing.** All controls work as after the tutorial: plan while paused, fly with Slow, Normal or Fast.
 - **The end.** A result card shows the outcome:
   - Arrived: the stars, fuel left, and **Fly again**.

@@ -25,5 +25,5 @@ Changes before CO-001 (the MVP, beta, getting-started tour and tutorial, tickets
 |---|---|---|---|---|---|
 | [CO-001](CO-001-dev-env-change-orders-lid.md) | Dev environment, change orders, CI/CD and LID finalized ([ZZF-89](https://linear.app/zizify-workshop/issue/ZZF-89)) | Feature | Done | +6 ~4 | +8 ~7 |
 | [CO-002](CO-002-main-game.md) | The main game, first playable level ([ZZF-92](https://linear.app/zizify-workshop/issue/ZZF-92)) | Feature | Done (2026-11-24) | +~19 ~~10 | +30 ~~23 |
-| [CO-003](CO-003-onboarding-redesign.md) | Onboarding that stays out of the way, and a choice at the door ([ZZF-93](https://linear.app/zizify-workshop/issue/ZZF-93), [ZZF-90](https://linear.app/zizify-workshop/issue/ZZF-90)) | Feature | In progress | +3 ~9 | |
-| [CO-004](CO-004-trajectory-stays-fixed.md) | "The trajectory stays fixed" ([ZZF-91](https://linear.app/zizify-workshop/issue/ZZF-91)), delivered in CO-003 | Bug | In progress | +1 ~2 | |
+| [CO-003](CO-003-onboarding-redesign.md) | Onboarding that stays out of the way, and a choice at the door ([ZZF-93](https://linear.app/zizify-workshop/issue/ZZF-93), [ZZF-90](https://linear.app/zizify-workshop/issue/ZZF-90)) | Feature | Done (2026-11-24) | +3 ~9 | +4 ~6 |
+| [CO-004](CO-004-trajectory-stays-fixed.md) | "The trajectory stays fixed" ([ZZF-91](https://linear.app/zizify-workshop/issue/ZZF-91)), delivered in CO-003 | Bug | Done (2026-11-24) | +1 ~2 | +0 ~1 |
