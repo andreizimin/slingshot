@@ -6,8 +6,8 @@ Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `t
 
 ## Camera and drawing
 
-- [x] **COCKPIT-CAM-001**: The cockpit shall draw every ship position (live ship, trail, prediction) as the ship's position minus the planet's position at the same sim time, with the planet fixed at the canvas centre, world `+x` to screen right and world `+y` to screen up.
-- [x] **COCKPIT-CAM-002**: While the game runs, the cockpit shall set the target scale so the ship-to-planet distance spans 35% of the canvas's smaller dimension, clamped between 1,000 and 20,000 km per CSS pixel, and move the current scale 15% of the way toward the target each frame.
+- [ ] **COCKPIT-CAM-001**: The cockpit shall draw every ship position (the live ship, each trail point and each prediction point) as that position minus the focus world's position at that position's own sim time, with world `+x` to screen right and world `+y` to screen up, and shall move the camera centre 12% of the remaining way toward the focus world each frame.
+- [ ] **COCKPIT-CAM-002**: The cockpit shall set the target scale so the ship-to-focus-world distance spans 35% of the canvas's smaller dimension, clamped between 1,000 and 20,000 km per CSS pixel, and shall move the current scale linearly 15% of the remaining way toward the target each frame, paused or running.
 - [x] **COCKPIT-CAM-005**: The cockpit shall never set the target scale smaller than needed to keep the ship's drawn position at least 170 px below the top edge, 110 px above the bottom edge, and 110 px from each side (60 px on screens narrower than 600 px) so its speed arrows and labels fit.
 - [x] **COCKPIT-CAM-003**: When the page loads or the player resets, the cockpit shall set the current scale directly to the target scale.
 - [x] **COCKPIT-CAM-004**: The cockpit shall fill the browser window with the canvas, resize it when the window resizes, and render at the device pixel ratio.
@@ -15,11 +15,11 @@ Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `t
 ## Storybook proportions
 
 - [x] **COCKPIT-DRAW-001**: The cockpit shall draw the ship as a 12 CSS-pixel rocket (white body, blue window, red fins) pointing along its planet-frame velocity, independent of zoom.
-- [x] **COCKPIT-DRAW-002**: The cockpit shall draw the planet as a banded tan disc of radius `max(PLANET_RADIUS / scale, 24)` CSS pixels.
+- [ ] **COCKPIT-DRAW-002**: The cockpit shall draw every world in the scenario as a banded tan disc of radius `max(its radius / scale, 24)` CSS pixels at its current position.
 - [x] **COCKPIT-DRAW-003**: Unless the sim status is `'crashed'`, the cockpit shall draw the ship through the same radial remap as the paths (COCKPIT-DRAW-010), so the ship always sits on its trail and never inside the drawn planet; a crashed ship is drawn at its true position. The sim state is unchanged.
 - [x] **COCKPIT-DRAW-004**: The cockpit shall draw the ship pointing along its heading and, while throttle is above 0, an orange-and-yellow flame from its tail whose length grows with throttle.
 - [x] **COCKPIT-DRAW-008**: While the ship is flying, the cockpit shall draw two speed arrows from the ship: a thin grey arrow (4 px per km/s) for the planet-frame speed toward (or away from) the planet, and a thick orange arrow (14 px per km/s, at least 30 px when non-zero) for the sideways speed, both starting just outside the ship body and labelled in km/s inside dark pills past their tips; while a sideways manoeuvre is queued, it shall also draw the sideways speed the plan will produce as a dashed arrow on top, labelled "(planned)".
-- [x] **COCKPIT-DRAW-005**: The cockpit shall draw a yellow arrow pointing screen-up from beside the planet with the label "planet moving this way", and a Star badge: an arrow-shaped bubble with a small sun inside, its tip pointing toward the star, labelled "Star", placed on the screen edge where the line from the planet toward the star meets it (behind the ship at the start), kept clear of the top and bottom HUD bands.
+- [ ] **COCKPIT-DRAW-005**: The cockpit shall draw, beside each world, a yellow arrow along that world's velocity in the scenario's frame, labelled "planet moving this way" for the focus world; and, only in a scenario with a star, a Star badge: an arrow-shaped bubble with a small sun inside, its tip pointing toward the star, labelled "Star", placed on the screen edge where the line from the planet toward the star meets it (behind the ship at the start), kept clear of the top and bottom HUD bands.
 - [x] **COCKPIT-DRAW-009**: The cockpit shall draw the dashed planned sideways arrow only while paused with a plan; while running it shall show only actual speeds, and it shall omit the sideways arrow and label when the sideways speed is under 0.05 km/s.
 - [x] **COCKPIT-DRAW-010**: When drawing the trail or the prediction line, the cockpit shall draw each point at screen distance √(d² + K²) from the planet centre on its true bearing, where d is its true screen distance and K² = (drawn planet radius + 6 px)² − (true planet radius in px)² (zero when not inflated), so paths bend smoothly around the drawn planet instead of crossing it or hugging its edge; the sim state is unchanged.
 - [x] **COCKPIT-TUNE-001**: Where the page URL contains `?tune`, the cockpit shall offer a speed tuner (hidden otherwise), opened from a round button at the bottom right, with sliders for the Slow, Normal and Fast steps-per-second values that apply immediately and display the current value.
@@ -35,7 +35,7 @@ Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `t
 
 ## Readouts
 
-- [x] **COCKPIT-HUD-001**: The cockpit shall show, top centre, the label "Your speed" above the star-frame speed in km/s to one decimal place.
+- [ ] **COCKPIT-HUD-001**: The cockpit shall show, top centre, the label "Your speed" above the ship's speed in the scenario's frame (the star's in the tutorial, the pond's in the level) in km/s to one decimal place.
 - [x] **COCKPIT-HUD-002**: The cockpit shall show, below the speed, the speed change from the start as `▲ +x.x` in green when above +0.05 km/s, `▼ −x.x` in red when below −0.05 km/s, and grey otherwise.
 - [x] **COCKPIT-HUD-003**: The cockpit shall show, top left, the label "Fuel" above a rounded bar filled to the remaining fraction of `FUEL_DV`, sky blue at 20% or more and red below 20%.
 - [x] **COCKPIT-HUD-004**: The cockpit shall show, bottom centre, four buttons labelled Pause, Slow, Normal and Fast, each with a stroke icon, with the active setting filled cyan.
@@ -74,6 +74,15 @@ Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `t
 ## Frame loop
 
 - [x] **COCKPIT-LOOP-001**: On each animation frame, the cockpit shall compute steps with `stepsForFrame` from the real time elapsed since the previous frame, call `advance` with that count and the current thrust direction, then draw.
+
+## The level
+
+- [ ] **COCKPIT-CAM-006**: In the frame in which the focus world changes, the cockpit shall start drawing the whole trail, and the prediction line if one is shown, in the new focus world's frame, while the camera centre eases across per `COCKPIT-CAM-001`.
+- [ ] **COCKPIT-DRAW-011**: In the level, the cockpit shall draw each world's name in a small pill beside it.
+- [ ] **COCKPIT-DRAW-012**: In the level, the cockpit shall draw the destination's catch radius as a pulsing ring whose radius is the catch radius at true scale, but never under 30 px; and, while the destination's centre is off screen, an arrow at the screen edge pointing to it, labelled with its name and the distance from the ship to its centre in million km, rounded to one decimal place.
+- [ ] **COCKPIT-HUD-008**: In the level, while the ship is within the destination's catch radius, the cockpit shall show under the speed readout "Approach X.X km/s · need under 5", with X.X the far speed relative to the destination (`SIM-READ-003`) rounded to one decimal place, in green when that far speed is strictly under the level's catch speed.
+- [ ] **COCKPIT-MSG-004**: In the level, the cockpit shall show the level's ready and result cards (`LEVEL-007`, `LEVEL-008`) and none of the tutorial's messages, cards or checkpoints (the departed Boost/Brake card, the mid-swing checkpoint, the tour's captions), which shall appear only in the tutorial.
+- [ ] **COCKPIT-PRED-004**: The cockpit shall compute the prediction only while paused (when pausing, after a reset, and whenever the queued plan changes while paused), shall not draw any prediction while the game runs (`COCKPIT-PRED-002`), and shall use the scenario's prediction horizon.
 
 ## Verified by hand
 

@@ -166,3 +166,19 @@ test('analytics payloads hold only numbers and fixed categories', () => {
 test('page loads the shared feedback widget for project "slingshot", above the time buttons', () => {
   assert.match(html, /<script src="https:\/\/feedback\.andreizimin\.com\/widget\.js" data-project="slingshot"[^>]*data-offset="[^"]+"[^>]*defer><\/script>/);
 });
+
+// @spec COCKPIT-HUD-008
+test('approach readout: far speed against the catch speed, green only when strictly under', () => {
+  assert.equal(view.approachReadout({ inside: false, farSpeed: 3, catchSpeed: 5 }), null);
+  assert.deepEqual(view.approachReadout({ inside: true, farSpeed: 7.24, catchSpeed: 5 }), { text: 'Approach 7.2 km/s · need under 5', ok: false });
+  assert.deepEqual(view.approachReadout({ inside: true, farSpeed: 4.96, catchSpeed: 5 }), { text: 'Approach 5.0 km/s · need under 5', ok: true });
+  assert.equal(view.approachReadout({ inside: true, farSpeed: 5, catchSpeed: 5 }).ok, false, 'exactly 5 is not under');
+});
+
+// @spec COCKPIT-DRAW-012
+test('destination marker: ring at true scale but at least 30 px; label with name and million-km distance', () => {
+  assert.equal(view.catchRingRadius(3.0e6, 20000), 150);
+  assert.equal(view.catchRingRadius(3.0e6, 200000), 30, 'never under 30 px');
+  assert.equal(view.destinationLabel('Haven', 12_349_000), 'Haven · 12.3M km');
+  assert.equal(view.destinationLabel('Haven', 950_000), 'Haven · 1.0M km');
+});

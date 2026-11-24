@@ -10,9 +10,11 @@ A previous attempt that built from the full spec in one pass did not produce a w
 
 ## Approach
 
-### Current scope: the first vertical slice
+### Current scope: the tutorial and the first level
 
-One star, one planet on a fixed circular orbit around it, and one ship. The player steers by changing only the ship's sideways speed, with a small fuel budget. Play alternates between two modes: **paused**, where the player plans a course and sees a prediction line of exactly where it leads, and **running**, where the ship flies it and the screen shows only what is actually happening. The player sees the ship's speed relative to the star; passing behind the planet makes that number climb, passing in front makes it fall. No missions, no map, no story.
+**The tutorial** is one star, one planet on a fixed circular orbit around it, and one ship. The player steers by changing only the ship's sideways speed, with a small fuel budget. Play alternates between two modes: **paused**, where the player plans a course and sees a prediction line of exactly where it leads, and **running**, where the ship flies it and the screen shows only what is actually happening. Passing behind the planet makes the speed climb, passing in front makes it fall.
+
+**The level** is the game: a pond of three worlds drifting at constant velocities, with no star. The ship cannot reach the destination world on fuel alone. It has to chain slingshots, a boost behind one world and a brake in front of another, and arrive slowly enough to be caught. Fuel left earns 1–3 stars. No map, missions or story yet.
 
 ### Simulation separate from presentation
 
@@ -38,13 +40,14 @@ The game is `index.html` plus plain JavaScript ES modules, served as static file
 ## Goals
 
 1. A tester can reliably produce a speed **boost** by passing behind the planet and a **brake** by passing in front.
-2. The flyby acceptance test passes: in the planet's frame, the ship's exit speed equals its entry speed within a tight tolerance.
+2. The flyby acceptance test passes: in a world's frame, the ship's exit speed equals its entry speed within a tight tolerance.
 3. Changing the time-control setting does not change the trajectory.
 4. The slice is live at `slingshot.andreizimin.com`, and every change reaches it through the dev site at `slingshot-dev.andreizimin.com`.
+5. A player can finish the level, and cannot finish it on fuel alone; both are proven by tests on the real level and physics.
 
 ## Non-Goals
 
-- Multiple systems, drifting lilies, map reveal, missions, scoring or narrative. These are later slices.
+- More than one level, a map that reveals them, missions or narrative. These are later slices.
 - Saving progress, accounts or any backend.
 - Sound and art beyond simple shapes.
 
@@ -80,7 +83,8 @@ flowchart LR
 |---|---|---|
 | Flight sim | Bodies, gravity, symplectic integrator, fixed-step time advance, thrust and fuel, prediction line, speed in the star's and planet's frames. No DOM. | `docs/intent/flight-sim/` |
 | Cockpit | Canvas rendering with storybook proportions, keyboard, mouse and touch controls, speed readout and arrows, fuel display, time controls. Drives the sim each animation frame. Its decisions live in a pure, tested module (`view.js`). | `docs/intent/cockpit/` |
-| Getting-started tour | The game's front door, on every load: a guided walk over the frozen game (camera moves, caption cards), then the player plans and flies a pass on either side, behind for a boost or in front for a brake, and ends with I'm ready into free flight. The ? button restarts it. | `docs/intent/tour/` |
+| Level | The first playable level: three drifting worlds, the destination, winning and losing, stars by fuel. A solver proves it winnable, and not on fuel alone. | `docs/intent/level/` |
+| Getting-started tour | The game's front door, on every load: a guided walk over the frozen game (camera moves, caption cards), then the player plans and flies a pass on either side, behind for a boost or in front for a brake, and ends with I'm ready into the level. The ? button restarts it. | `docs/intent/tour/` |
 | Analytics | Shared Umami tag and cookieless flight and tour events. | `docs/intent/analytics/` |
 | Feedback | Shared feedback widget, and keeping game keys out of its form. | `docs/intent/feedback/` |
 | Hosting | Two stages, production (`slingshot.andreizimin.com`) and dev (`slingshot-dev.andreizimin.com`), deployed by a pipeline that tests every push and checks the live site after each deploy. | `docs/intent/hosting/` |
@@ -95,7 +99,8 @@ The cockpit depends on the flight sim; the flight sim depends on nothing. Visual
 | Stack | Plain JS ES modules, no build | Vite + TypeScript + Vitest; single inline HTML file | Fewest moving parts for a slice that must ship fast. The sim is still Node-importable for tests, which a single inline file would not be. A bundler can be added in a later slice without restructuring. |
 | Test runner | `node --test` | Vitest, Jest | Built into Node; no dependencies. |
 | Integrator | Velocity Verlet with a fixed step | Euler; RK4; adaptive step | Verlet is symplectic, so orbits don't spiral and flyby speed is conserved in the planet's frame. Euler gains energy. RK4 drifts over long runs. An adaptive step would make time control and prediction harder to keep identical. |
-| Planet motion | Prescribed circular orbit (position is a function of time) | Integrate the planet under the star's gravity | A prescribed orbit can't drift, keeps the scenario reproducible, and the planet's velocity is exact. The ship feels both bodies' gravity; the planet feels nothing. |
+| Planet motion | Prescribed motion (the tutorial's circular orbit; the level's constant drift) | Integrate the worlds under each other's gravity | Prescribed motion can't drift, keeps every scenario reproducible, and each world's velocity is exact. The ship feels every body's gravity; the worlds feel nothing. |
+| What a lily is | A single massive world drifting across the pond | Planets of one star system (a grand tour); star systems placed unrealistically close | Real gravity from every world with no stitching between them, at realistic spacing. Keeps the tenet *exaggerate the picture, never the physics*. |
 | On-screen proportions | Ship and planets drawn at comparable sizes, decoupled from physical radius | True scale; uniformly scaled-up bodies | At true scale the ship is invisible and the planet is a speck next to its orbit. Decoupling drawn size from physics lets the picture be readable without changing a single trajectory. |
 | Hosting | AWS S3 + CloudFront with Route 53 subdomains, provisioned by SST `StaticSite` | Cloudflare, Vercel, GitHub Pages | Matches the developer's existing AWS setup for the parent domain, so DNS and certificates come from the same zone. |
 | How changes ship | Change order → branch → pipeline to dev → one check by the requester → merge deploys production | Deploying from the developer's laptop after a local review | One path that cannot be done out of order: nothing reaches players untested, unchecked on dev, or without a record of what it was meant to change. |

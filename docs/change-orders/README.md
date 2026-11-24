@@ -24,3 +24,4 @@ Changes before CO-001 (the MVP, beta, getting-started tour and tutorial, tickets
 | ID | Title | Type | Status | Specs predicted | Specs actual |
 |---|---|---|---|---|---|
 | [CO-001](CO-001-dev-env-change-orders-lid.md) | Dev environment, change orders, CI/CD and LID finalized ([ZZF-89](https://linear.app/zizify-workshop/issue/ZZF-89)) | Feature | Done | +6 ~4 | +8 ~7 |
+| [CO-002](CO-002-main-game.md) | The main game, first playable level ([ZZF-92](https://linear.app/zizify-workshop/issue/ZZF-92)) | Feature | In progress | +~19 ~~10 | |

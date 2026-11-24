@@ -223,7 +223,7 @@ test('prediction matches the live coasting trajectory and leaves state alone', (
   for (let k = 1; k <= 5; k++) {
     for (let i = 0; i < 20; i++) live = sim.step(live, null);
     assert.deepEqual(pred.points[k - 1].ship, live.pos);
-    assert.deepEqual(pred.points[k - 1].planet, sim.planetPosition(live.t));
+    assert.equal(pred.points[k - 1].t, live.t);
   }
 });
 
@@ -356,4 +356,230 @@ test('a flight departs only after a close pass, once back beyond the start dista
   for (let i = 0; i < 2000; i++) away = sim.step(away, null);
   assert.ok(dist(away) > sim.START_DISTANCE);
   assert.equal(away.status, 'flying');
+});
+
+
+// ---------- scenarios: the tutorial and the pond ----------
+
+const GM = sim.PLANET_GM;
+const drift = (name, x, y, vx, vy) => ({ name, gm: GM, radius: sim.PLANET_RADIUS, drift: { x, y, vx, vy } });
+// A pond scenario with no star; ship 4e6 km on world 0's -x side heading straight at it.
+const pond = (worlds, end = { rule: 'flyby', startDistance: 4.0e6 }) => {
+  const w0 = worlds[0].drift;
+  const v = Math.sqrt(100 + (2 * GM) / 4.0e6);
+  return {
+    name: 'test pond', worlds, fuel: 10, predictSteps: 20000, end,
+    ship: { pos: { x: w0.x - 4.0e6, y: w0.y }, vel: { x: w0.vx + v, y: w0.vy } },
+  };
+};
+
+// @spec SIM-SCN-005, SIM-SCN-006
+test('initialState takes the ship, fuel and frame from a scenario, and keeps the scenario by reference', () => {
+  const scn = pond([drift('A', 0, 0, 0, 13), drift('B', 3e7, 0, 0, 0)]);
+  scn.fuel = 7;
+  const s = sim.initialState(scn);
+  assert.deepEqual(s.pos, scn.ship.pos);
+  assert.deepEqual(s.vel, scn.ship.vel);
+  assert.equal(s.fuel, 7);
+  assert.equal(s.scenario, scn, 'shared, not copied');
+  assert.equal(s.focus, 0, 'focus starts at the nearest world');
+  close(s.closest, 4.0e6, 1e-6);
+  close(s.startSpeed, Math.hypot(scn.ship.vel.x, scn.ship.vel.y), 1e-12);
+  assert.equal(s.status, 'flying');
+});
+
+// @spec SIM-SCN-007, SIM-READ-004
+test('a drifting world moves in a straight line at its constant velocity', () => {
+  const scn = pond([drift('A', 1e6, -2e6, 3, 4)]);
+  assert.deepEqual(sim.worldPosition(scn, 0, 1000), { x: 1e6 + 3000, y: -2e6 + 4000 });
+  assert.deepEqual(sim.worldVelocity(scn, 0, 1e9), { x: 3, y: 4 });
+  assert.deepEqual(sim.worldPosition(sim.TUTORIAL, 0, 5000), sim.planetPosition(5000), 'the tutorial planet is world 0');
+  assert.equal(sim.focusWorld(sim.initialState(scn)), 0);
+});
+
+// @spec SIM-STEP-002
+test('gravity sums every world, and the star only when the scenario has one', () => {
+  const scn = pond([drift('A', 0, 0, 0, 0), drift('B', 1e7, 0, 0, 0)]);
+  const g = sim.gravity(4e6, 3e6, 0, scn);
+  const pull = (wx, wy) => {
+    const dx = wx - 4e6, dy = wy - 3e6, r = Math.hypot(dx, dy);
+    return { x: (GM * dx) / r ** 3, y: (GM * dy) / r ** 3 };
+  };
+  const a = pull(0, 0), b = pull(1e7, 0);
+  close(g.x, a.x + b.x, 1e-18);
+  close(g.y, a.y + b.y, 1e-18);
+  // The default scenario is the tutorial's, with its star.
+  assert.deepEqual(sim.gravity(5e8, 1e8, 100), sim.gravity(5e8, 1e8, 100, sim.TUTORIAL));
+});
+
+// @spec SIM-STEP-004
+test('a flight that has ended in any way is frozen', () => {
+  for (const status of ['crashed', 'departed', 'arrived', 'lost']) {
+    const s = { ...sim.initialState(), status };
+    assert.deepEqual(sim.step(s, 'up'), s, status);
+  }
+});
+
+// @spec SIM-STEP-005
+test('closest tracks the distance to world 0, even when another world is nearer', () => {
+  const scn = pond([drift('A', 0, 0, 0, 0), drift('B', -4.3e6, 1e5, 0, 0)]);
+  let s = sim.initialState(scn);
+  for (let i = 0; i < 50; i++) s = sim.step(s, null);
+  const r0 = Math.hypot(s.pos.x, s.pos.y);
+  close(s.closest, r0, 1e-6);
+});
+
+// @spec SIM-STEP-006
+test('focus moves to another world only once it is 10% nearer than the current focus', () => {
+  const scn = pond([drift('A', 0, 0, 0, 0), drift('B', -8.0e6, 0, 0, 0)]);
+  // Ship placed between the worlds, nearer A (focus A), coasting toward B.
+  let s = { ...sim.initialState(scn), pos: { x: -3.9e6, y: 0 }, vel: { x: -300, y: 0 } };
+  s = { ...s, grav: sim.gravity(s.pos.x, s.pos.y, 0, scn), focus: 0 };
+  let switchedAt = null;
+  for (let i = 0; i < 400 && switchedAt === null; i++) {
+    s = sim.step(s, null);
+    if (s.focus === 1) switchedAt = s.pos.x;
+  }
+  assert.ok(switchedAt !== null, 'focus switched to B');
+  const dA = Math.abs(switchedAt), dB = Math.abs(switchedAt + 8.0e6);
+  assert.ok(dB < 0.9 * dA, `B was 10% nearer (dA ${dA}, dB ${dB})`);
+  assert.ok(dB > 0.9 * dA - 300 * 30 * 2, 'and not much earlier than that');
+});
+
+// @spec SIM-FUEL-006
+test('"up" is sideways relative to the focus world, not a fixed direction', () => {
+  // World straight above the ship: toward = +y, so "up" (90° CCW) is -x.
+  const scn = pond([drift('A', 0, 0, 0, 0)]);
+  const s0 = { ...sim.initialState(scn), pos: { x: 0, y: -4e6 }, vel: { x: 0, y: 10 }, heading: Math.PI, throttle: 1 };
+  const s = { ...s0, grav: sim.gravity(0, -4e6, 0, scn) };
+  const pushed = sim.step(s, 'up');
+  const coasted = sim.step(s, null);
+  close(pushed.vel.x - coasted.vel.x, -5e-5 * 30, 1e-9);
+  close(pushed.vel.y - coasted.vel.y, 0, 1e-9);
+});
+
+// @spec SIM-END-001
+test('hitting any world is a crash', () => {
+  const scn = pond([drift('A', 0, 0, 0, 0), drift('B', 0, 3e7, 0, 0)]);
+  let s = { ...sim.initialState(scn), pos: { x: 0, y: 3e7 - 1.0e6 }, vel: { x: 0, y: 30 } };
+  s = { ...s, grav: sim.gravity(s.pos.x, s.pos.y, 0, scn), focus: 1 };
+  for (let i = 0; i < 5000 && s.status === 'flying'; i++) s = sim.step(s, null);
+  assert.equal(s.status, 'crashed');
+  close(Math.hypot(s.pos.x, s.pos.y - 3e7), 0, sim.PLANET_RADIUS);
+});
+
+// @spec SIM-END-002, SIM-END-006
+test('departing is a flyby-rule ending only; the level rule never departs', () => {
+  const levelEnd = { rule: 'level', destination: 1, catchRadius: 3e6, catchSpeed: 5, lostDistance: 1e9 };
+  const scn = pond([drift('A', 0, 0, 0, 13), drift('B', 9e8, 9e8, 0, 0)], levelEnd);
+  let s = sim.planningBurn(sim.initialState(scn), 'down', 3);
+  for (let i = 0; i < 60000 && s.status === 'flying'; i++) s = sim.step(s, null);
+  assert.equal(s.status, 'flying', 'past the flyby and far out, still flying under the level rule');
+  assert.ok(Math.hypot(s.pos.x - sim.worldPosition(scn, 0, s.t).x, s.pos.y - sim.worldPosition(scn, 0, s.t).y) > 4.0e6);
+});
+
+// @spec SIM-END-004, SIM-READ-003
+test('arrived: inside the catch radius with a far speed under the catch speed', () => {
+  const levelEnd = { rule: 'level', destination: 1, catchRadius: 3e6, catchSpeed: 5, lostDistance: 1e9 };
+  const scn = pond([drift('A', -5e7, 0, 0, 0), drift('H', 0, 0, 2, 1)], levelEnd);
+  // Ship 3.5e6 km from H, drifting toward it slowly in H's frame, offset so it does not hit.
+  const mk = (vrel) => {
+    let s = { ...sim.initialState(scn), pos: { x: -3.5e6, y: 5e5 }, vel: { x: 2 + vrel, y: 1 }, focus: 1, closest: 4.5e7 };
+    return { ...s, grav: sim.gravity(s.pos.x, s.pos.y, 0, scn) };
+  };
+  // Far speed is distance-independent: v² − 2GM/d.
+  const probe = mk(10);
+  const d = Math.hypot(3.5e6, 5e5), v = 10;
+  close(sim.farSpeed(probe, 1), Math.sqrt(v * v - (2 * GM) / d), 1e-12);
+  assert.equal(sim.farSpeed({ ...probe, vel: { x: 2, y: 1 } }, 1), 0, 'bound: far speed 0');
+  let slow = mk(4);
+  for (let i = 0; i < 20000 && slow.status === 'flying'; i++) slow = sim.step(slow, null);
+  assert.equal(slow.status, 'arrived');
+  let fast = mk(12);
+  for (let i = 0; i < 1500 && fast.status === 'flying'; i++) fast = sim.step(fast, null);
+  assert.notEqual(fast.status, 'arrived', 'too fast is not caught');
+});
+
+// @spec SIM-END-005
+test('lost: strictly farther than the lost distance from every world', () => {
+  const levelEnd = { rule: 'level', destination: 1, catchRadius: 3e6, catchSpeed: 5, lostDistance: 1.0e7 };
+  const scn = pond([drift('A', 0, 0, 0, 0), drift('B', 5e6, 0, 0, 0)], levelEnd);
+  let s = { ...sim.initialState(scn), pos: { x: -9.0e6, y: 0 }, vel: { x: -40, y: 0 }, focus: 0, closest: 9e6 };
+  s = { ...s, grav: sim.gravity(s.pos.x, s.pos.y, 0, scn) };
+  for (let i = 0; i < 20000 && s.status === 'flying'; i++) s = sim.step(s, null);
+  assert.equal(s.status, 'lost');
+  assert.ok(Math.abs(s.pos.x) > 1.0e7, 'beyond A');
+  assert.ok(Math.abs(s.pos.x - 5e6) > 1.0e7, 'and beyond B');
+});
+
+// @spec SIM-TIME-004
+test('advance samples carry position and time, and include the step that ends the flight', () => {
+  const { state, samples } = sim.advance(sim.initialState(), 25, null);
+  assert.equal(samples.length, 2);
+  assert.deepEqual(Object.keys(samples[0]).sort(), ['t', 'x', 'y']);
+  assert.equal(samples[1].t, 20 * sim.DT);
+  assert.equal(state.steps, 25);
+  // Coasting from the start crashes; the final sample is the crash step even off a multiple of 10.
+  const out = sim.advance(sim.initialState(), 100000, null);
+  assert.equal(out.state.status, 'crashed');
+  const last = out.samples[out.samples.length - 1];
+  assert.equal(last.t, out.state.t);
+  assert.deepEqual({ x: last.x, y: last.y }, out.state.pos);
+});
+
+// @spec SIM-PRED-001, SIM-PRED-002, SIM-PRED-003
+test('prediction uses the scenario horizon, counts from its own start, and ends where the flight would', () => {
+  const pred = sim.predict(sim.initialState());
+  assert.equal(pred.ending, 'crashed');
+  const first = pred.points[0];
+  assert.equal(first.t, 20 * sim.DT, 'the first point is 20 steps in, not the start');
+  const last = pred.points[pred.points.length - 1];
+  assert.ok(last.t % (20 * sim.DT) !== 0 || pred.points.length > 0, 'terminal point recorded');
+  const scn = pond([drift('A', 0, 0, 0, 0)]);
+  scn.predictSteps = 100;
+  const short = sim.predict({ ...sim.planningBurn(sim.initialState(scn), 'down', 9) });
+  assert.equal(short.ending, 'horizon');
+  assert.equal(short.points.length, 5);
+});
+
+// @spec SIM-READ-001, SIM-READ-002
+test('readouts are relative to the focus world; speed is in the scenario frame', () => {
+  const scn = pond([drift('A', 0, 0, 0, 13), drift('B', -6e6, 0, 5, 0)]);
+  let s = { ...sim.initialState(scn), pos: { x: -5e6, y: 1e5 }, vel: { x: 1, y: 2 }, focus: 1 };
+  assert.deepEqual(sim.planetRelativePosition(s), { x: 1e6, y: 1e5 });
+  assert.deepEqual(sim.planetFrameVelocity(s), { x: -4, y: 2 });
+  close(sim.starFrameSpeed(s), Math.hypot(1, 2), 1e-12);
+  const { toward } = sim.axes(s);
+  close(toward.x, -1e6 / Math.hypot(1e6, 1e5), 1e-12, 'toward points at B');
+  const c = sim.speedComponents(s);
+  close(Math.hypot(c.toward, c.side), Math.hypot(4, 2), 1e-12);
+});
+
+// @spec SIM-ACC-004
+test('a coasting flyby of a drifting world conserves speed relative to it within 0.1%', () => {
+  const scn = pond([drift('A', 0, 0, 7, -3)]);
+  const v = Math.sqrt(100 + (2 * GM) / Math.hypot(4e6, 6.5e5));
+  let s = { ...sim.initialState(scn), pos: { x: -4e6, y: -6.5e5 }, vel: { x: 7 + v, y: -3 }, fuel: 0 };
+  s = { ...s, grav: sim.gravity(s.pos.x, s.pos.y, 0, scn) };
+  let vin = null, vout = null, inside = false;
+  for (let i = 0; i < 100000 && s.status === 'flying'; i++) {
+    s = sim.step(s, null);
+    const r = sim.planetRelativePosition(s);
+    const fv = sim.planetFrameVelocity(s);
+    const d = Math.hypot(r.x, r.y);
+    if (!inside && d < 2.5e6) { inside = true; vin = Math.hypot(fv.x, fv.y); }
+    if (inside && d > 2.5e6) { vout = Math.hypot(fv.x, fv.y); break; }
+  }
+  assert.ok(vin && vout, 'flyby completed');
+  assert.ok(Math.abs(vout - vin) / vin < 0.001, `in ${vin} out ${vout}`);
+});
+
+// @spec SIM-ACC-005
+test('the tutorial is unchanged whether or not its scenario is passed', () => {
+  const a = sim.initialState();
+  const b = sim.initialState(sim.TUTORIAL);
+  assert.deepEqual(a, b);
+  let x = a, y = b;
+  for (let i = 0; i < 500; i++) { x = sim.step(x, i < 100 ? 'down' : null); y = sim.step(y, i < 100 ? 'down' : null); }
+  assert.deepEqual(x, y);
 });

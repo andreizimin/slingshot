@@ -34,45 +34,114 @@ export function planetVelocity(t) {
   return { x: -PLANET_SPEED * Math.sin(a), y: PLANET_SPEED * Math.cos(a) };
 }
 
-// @spec SIM-STEP-002
-export function gravity(x, y, t) {
-  const rs3 = Math.pow(x * x + y * y, 1.5);
-  const p = planetPosition(t);
-  const dx = x - p.x;
-  const dy = y - p.y;
-  const rp3 = Math.pow(dx * dx + dy * dy, 1.5);
+// ---------- scenarios ----------
+// A scenario is plain data: an optional star at the origin, worlds with prescribed motion
+// (an orbit around the star, or a constant drift across the pond), the ship's start, the fuel
+// budget, the prediction horizon, and the end rule. The tutorial is one scenario; levels are others.
+
+// The tutorial's ship: START_DISTANCE on the planet's sunward side, heading straight at it with
+// V_INF of approach speed far away (the speed energy conservation gives at that distance).
+function tutorialShip() {
+  const relSpeed = Math.sqrt(V_INF * V_INF + (2 * PLANET_GM) / START_DISTANCE);
   return {
-    x: (-STAR_GM * x) / rs3 - (PLANET_GM * dx) / rp3,
-    y: (-STAR_GM * y) / rs3 - (PLANET_GM * dy) / rp3,
+    pos: { x: ORBIT_RADIUS - START_DISTANCE, y: 0 },
+    vel: { x: relSpeed, y: PLANET_SPEED },
   };
 }
 
-// @spec SIM-SCN-003, SIM-SCN-004
-export function initialState() {
-  const p = planetPosition(0);
-  const pv = planetVelocity(0);
-  const relSpeed = Math.sqrt(V_INF * V_INF + (2 * PLANET_GM) / START_DISTANCE);
-  const pos = { x: p.x - START_DISTANCE, y: p.y };
-  const vel = { x: pv.x + relSpeed, y: pv.y };
+// @spec SIM-SCN-005
+export const TUTORIAL = Object.freeze({
+  name: 'tutorial',
+  starGM: STAR_GM,
+  worlds: [{ name: 'Planet', gm: PLANET_GM, radius: PLANET_RADIUS, orbit: { radius: ORBIT_RADIUS, speed: PLANET_SPEED } }],
+  ship: tutorialShip(),
+  fuel: FUEL_DV,
+  predictSteps: 20000,
+  end: { rule: 'flyby', startDistance: START_DISTANCE },
+});
+
+// @spec SIM-SCN-007, SIM-READ-004
+export function worldPosition(scenario, i, t) {
+  const w = scenario.worlds[i];
+  if (w.orbit) {
+    const a = (w.orbit.speed / w.orbit.radius) * t;
+    return { x: w.orbit.radius * Math.cos(a), y: w.orbit.radius * Math.sin(a) };
+  }
+  return { x: w.drift.x + w.drift.vx * t, y: w.drift.y + w.drift.vy * t };
+}
+
+export function worldVelocity(scenario, i, t) {
+  const w = scenario.worlds[i];
+  if (w.orbit) {
+    const a = (w.orbit.speed / w.orbit.radius) * t;
+    return { x: -w.orbit.speed * Math.sin(a), y: w.orbit.speed * Math.cos(a) };
+  }
+  return { x: w.drift.vx, y: w.drift.vy };
+}
+
+// @spec SIM-STEP-002
+export function gravity(x, y, t, scenario = TUTORIAL) {
+  let gx = 0;
+  let gy = 0;
+  if (scenario.starGM) {
+    const rs3 = Math.pow(x * x + y * y, 1.5);
+    gx -= (scenario.starGM * x) / rs3;
+    gy -= (scenario.starGM * y) / rs3;
+  }
+  for (let i = 0; i < scenario.worlds.length; i++) {
+    const p = worldPosition(scenario, i, t);
+    const dx = x - p.x;
+    const dy = y - p.y;
+    const r3 = Math.pow(dx * dx + dy * dy, 1.5);
+    gx -= (scenario.worlds[i].gm * dx) / r3;
+    gy -= (scenario.worlds[i].gm * dy) / r3;
+  }
+  return { x: gx, y: gy };
+}
+
+const distanceTo = (scenario, i, pos, t) => {
+  const p = worldPosition(scenario, i, t);
+  return Math.hypot(pos.x - p.x, pos.y - p.y);
+};
+
+function nearestWorld(scenario, pos, t) {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < scenario.worlds.length; i++) {
+    const d = distanceTo(scenario, i, pos, t);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+// @spec SIM-SCN-003, SIM-SCN-004, SIM-SCN-006
+export function initialState(scenario = TUTORIAL) {
+  const pos = { ...scenario.ship.pos };
+  const vel = { ...scenario.ship.vel };
   return {
     t: 0,
     steps: 0,
     pos,
     vel,
-    grav: gravity(pos.x, pos.y, 0),
-    fuel: FUEL_DV,
+    grav: gravity(pos.x, pos.y, 0, scenario),
+    fuel: scenario.fuel,
     status: 'flying',
-    closest: START_DISTANCE,
+    closest: distanceTo(scenario, 0, pos, 0),
     startSpeed: Math.hypot(vel.x, vel.y),
     heading: 0,               // nose direction, radians; starts facing the planet (+x)
     throttle: 0,              // 0..1, spools up while firing
     planDv: 0,                // queued sideways manoeuvre, signed km/s (+ = 'up' side)
+    focus: nearestWorld(scenario, pos, 0), // the world the ship steers by
+    crashedInto: null,        // index of the world hit, once crashed
+    scenario,                 // shared, never copied or changed
   };
 }
 
 function clone(s) {
   return { ...s, pos: { ...s.pos }, vel: { ...s.vel }, grav: { ...s.grav } };
 }
+
+const scenarioOf = (state) => state.scenario ?? TUTORIAL;
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // Only sideways pushes exist: 'up' is +1 along the sideways axis, 'down' is −1.
@@ -83,7 +152,7 @@ const sideSign = (thrustDir) => (Object.prototype.hasOwnProperty.call(SIDE_SIGN,
 // At the default start the planet is at +x from the ship, so sideways is +y (screen up).
 // @spec SIM-READ-002
 export function axes(state) {
-  const p = planetPosition(state.t);
+  const p = worldPosition(scenarioOf(state), state.focus ?? 0, state.t);
   const dx = p.x - state.pos.x;
   const dy = p.y - state.pos.y;
   const d = Math.hypot(dx, dy) || 1;
@@ -151,21 +220,42 @@ function stepInPlace(s, thrustDir) {
   s.pos.y += s.vel.y * DT + 0.5 * ay * DT * DT;
   s.t += DT;
   s.steps += 1;
-  const g = gravity(s.pos.x, s.pos.y, s.t);
+  const scenario = scenarioOf(s);
+  const g = gravity(s.pos.x, s.pos.y, s.t, scenario);
   s.vel.x += 0.5 * (s.grav.x + g.x) * DT + tx * DT;
   s.vel.y += 0.5 * (s.grav.y + g.y) * DT + ty * DT;
   s.grav = g;
 
-  const p = planetPosition(s.t);
-  const r = Math.hypot(s.pos.x - p.x, s.pos.y - p.y);
-  if (r < s.closest) s.closest = r;
-  if (r < PLANET_RADIUS) s.status = 'crashed';
-  else if (r > START_DISTANCE && s.closest < START_DISTANCE / 2) s.status = 'departed';
+  // Distances to every world at the new position and time.
+  const n = scenario.worlds.length;
+  const d = new Array(n);
+  for (let i = 0; i < n; i++) d[i] = distanceTo(scenario, i, s.pos, s.t);
+
+  // @spec SIM-STEP-005
+  if (d[0] < s.closest) s.closest = d[0];
+
+  // @spec SIM-STEP-006 — change focus only when another world is 10% nearer.
+  const focus = s.focus ?? 0;
+  let best = focus;
+  for (let i = 0; i < n; i++) if (i !== focus && d[i] < 0.9 * d[focus] && d[i] < d[best]) best = i;
+  s.focus = best;
+
+  // @spec SIM-END-006 — the scenario's own end rule, first condition wins.
+  for (let i = 0; i < n; i++) {
+    if (d[i] < scenario.worlds[i].radius) { s.status = 'crashed'; s.crashedInto = i; return tx !== 0 || ty !== 0; }
+  }
+  const end = scenario.end;
+  if (end.rule === 'flyby') {
+    if (d[0] > end.startDistance && s.closest < end.startDistance / 2) s.status = 'departed';
+  } else if (end.rule === 'level') {
+    if (d[end.destination] < end.catchRadius && farSpeed(s, end.destination) < end.catchSpeed) s.status = 'arrived';
+    else if (d.every((di) => di > end.lostDistance)) s.status = 'lost';
+  }
 
   return tx !== 0 || ty !== 0;
 }
 
-// @spec SIM-STEP-001, SIM-STEP-003, SIM-STEP-004, SIM-STEP-005, SIM-FUEL-001, SIM-FUEL-002, SIM-FUEL-003, SIM-FUEL-004, SIM-END-001, SIM-END-002
+// @spec SIM-STEP-001, SIM-STEP-003, SIM-STEP-004, SIM-FUEL-001, SIM-FUEL-002, SIM-FUEL-003, SIM-FUEL-004, SIM-END-001, SIM-END-002, SIM-END-004, SIM-END-005
 export function step(state, thrustDir) {
   const s = clone(state);
   stepInPlace(s, thrustDir);
@@ -194,7 +284,7 @@ export function advance(state, n, thrustDir) {
   for (let i = 0; i < n; i++) {
     if (s.status !== 'flying') break;
     if (stepInPlace(s, thrustDir)) thrusted = true;
-    if (s.steps % 10 === 0) samples.push(planetRelativePosition(s));
+    if (s.steps % 10 === 0 || s.status !== 'flying') samples.push({ x: s.pos.x, y: s.pos.y, t: s.t });
   }
   return { state: s, samples, thrusted };
 }
@@ -208,7 +298,7 @@ export function stepsForFrame(setting, elapsedSeconds, carry) {
 }
 
 // @spec SIM-PRED-001, SIM-PRED-002, SIM-PRED-003
-export function predict(state, maxSteps = 20000) {
+export function predict(state, maxSteps = scenarioOf(state).predictSteps) {
   const s = clone(state);
   const points = [];
   if (s.status !== 'flying') return { points, ending: s.status };
@@ -217,7 +307,7 @@ export function predict(state, maxSteps = 20000) {
     stepInPlace(s, null);
     const done = s.status !== 'flying';
     if (i % 20 === 0 || done) {
-      points.push({ ship: { x: s.pos.x, y: s.pos.y }, planet: planetPosition(s.t), step: i });
+      points.push({ ship: { x: s.pos.x, y: s.pos.y }, t: s.t, step: i });
     }
     if (done) {
       ending = s.status;
@@ -232,14 +322,30 @@ export function starFrameSpeed(state) {
   return Math.hypot(state.vel.x, state.vel.y);
 }
 
+// Relative to the focus world (the tutorial's planet when there is only one).
 export function planetFrameVelocity(state) {
-  const pv = planetVelocity(state.t);
+  const pv = worldVelocity(scenarioOf(state), state.focus ?? 0, state.t);
   return { x: state.vel.x - pv.x, y: state.vel.y - pv.y };
 }
 
 export function planetRelativePosition(state) {
-  const p = planetPosition(state.t);
+  const p = worldPosition(scenarioOf(state), state.focus ?? 0, state.t);
   return { x: state.pos.x - p.x, y: state.pos.y - p.y };
+}
+
+// @spec SIM-READ-004
+export const focusWorld = (state) => state.focus ?? 0;
+
+// The speed the ship would have relative to world i if it climbed out of that world's gravity;
+// 0 when the ship is bound to it. Unlike the plain relative speed, it does not grow as the ship falls in.
+// @spec SIM-READ-003
+export function farSpeed(state, i) {
+  const scenario = scenarioOf(state);
+  const p = worldPosition(scenario, i, state.t);
+  const v = worldVelocity(scenario, i, state.t);
+  const vr2 = (state.vel.x - v.x) ** 2 + (state.vel.y - v.y) ** 2;
+  const d = Math.hypot(state.pos.x - p.x, state.pos.y - p.y);
+  return Math.sqrt(Math.max(0, vr2 - (2 * scenario.worlds[i].gm) / d));
 }
 
 export function speedChange(state) {

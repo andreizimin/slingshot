@@ -380,7 +380,8 @@ function drawPrediction(now = 0) {
   const r = sim.planetRelativePosition(state);
   ctx.moveTo(...shipScreenPos(r));
   for (const p of prediction.points) {
-    ctx.lineTo(...pathPoint(p.ship.x - p.planet.x, p.ship.y - p.planet.y));
+    const w = sim.worldPosition(state.scenario, sim.focusWorld(state), p.t);
+    ctx.lineTo(...pathPoint(p.ship.x - w.x, p.ship.y - w.y));
   }
   ctx.stroke();
   ctx.setLineDash([]);
@@ -784,7 +785,10 @@ function frame(now) {
     const out = sim.advance(state, r.steps, dir);
     state = out.state;
     thrustedThisFrame = out.thrusted;
-    for (const p of out.samples) trail.push(p);
+    for (const p of out.samples) {
+      const w = sim.worldPosition(state.scenario, sim.focusWorld(state), p.t);
+      trail.push({ x: p.x - w.x, y: p.y - w.y });
+    }
     if (trail.length > TRAIL_MAX) trail.splice(0, trail.length - TRAIL_MAX);
     prediction = sim.predict(state);
   } else if (setting === 'paused' && dir && state.status === 'flying') {
