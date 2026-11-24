@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Type | Feature |
-| Status | In progress |
+| Status | Done (2026-11-24) |
 | Requested | 2026-11-23 |
 | Approved | 2026-11-24 |
 | Completed | |
@@ -131,30 +131,35 @@ None open. Decided on 2026-11-24:
 
 ## Outcome
 
-Filled in after the change is complete.
-
 ### Predicted vs Actual
 
 | Level | Predicted | Actual | Notes |
 |---|---|---|---|
-| HLD | 4 changes | | |
-| LLDs | 3 changed, 1 new (`level`) | | |
-| Specs | +~19 ~~10 −0–1 | | |
-| Tests | 4 files | | |
-| Code | ~10 files | | |
+| HLD | 4 changes | 4 changes | Scope, goal 5, the Level component, what a lily is. |
+| LLDs | 3 changed, 1 new (`level`) | 5 changed, 1 new | Tour and analytics LLDs also changed: the tutorial now leads into the level, and the tutorial's events are scoped to the tutorial. |
+| Specs | +~19 ~~10 −0–1 | +30 ~~23 −0 | More than predicted: the edge audit split the end rules, prediction and readouts into separate specs. |
+| Tests | 4 files | 5 files | `tests/level.test.js` is new; the tour test now checks that the free-flight note is gone. |
+| Code | ~10 files | 8 files | `physics.js`, `levels.js` (new), `level.js` (new), `view.js`, `main.js`, `index.html`, `style.css`, `tour.test.js` wording. |
 
 ### Surprises
+
+- **The first level layout did not win in the real engine.** It was placed with a prototype that had instant pushes and no focus switching. With turning, spool-up and the focus world, the designed 3 km/s push never reached Haven. The layout was placed again (Racer from (−9.776, 14.385) million km drifting (14, 0) km/s, Haven from (3.344, 9.463) million km drifting (−7.023, 14.733) km/s) and checked in the real engine: a 3 km/s push arrives with 7.0 km/s of fuel left (3 stars), and every first push from 1.5 to 4 km/s can be rescued with one correction at t = 150,000 s. Levels are now checked only against `site/sim/physics.js`.
+- **A blank screen that the unit tests could not see.** Changing the prediction points from planet-relative positions to positions plus time broke `main.js` on its first frame. `node --test` has no browser, so every test passed. A headless-Chrome run that reads the console now goes with every change to the physics.
+- **The off-screen destination label landed on the speed readout.** It is kept inside the same HUD-clear box as the ship.
 
 ### Commits
 
 | Hash | Message |
 |---|---|
+| `e66e04f` | CO-002 (WIP): scenarios, drifting worlds and the first level's physics |
+| (this commit) | CO-002: wire the level into the cockpit |
 
 ### Measurements
 
 | | |
 |---|---|
-| Tests before → after | unit 82 → |
-| Lines changed | |
-| Agent time | |
-| Deployed | |
+| Tests before → after | unit 82 → 108 |
+| Specs before → after | 126 → 156 |
+| Lines changed | 24 files, +1,219 −156 |
+| Agent time | about one working day, across two sessions |
+| Deployed | dev on push of this branch; production on merge |

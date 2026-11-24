@@ -20,6 +20,8 @@
     <span class="label">Your speed</span>
     <span class="value"><span id="speed">0.0</span> <span class="unit">km/s</span></span>
     <span id="change" class="change flat">▲ +0.0</span>
+    <!-- @spec COCKPIT-HUD-008 -->
+    <span id="approach" class="approach" hidden></span>
   </div>
 
   <div id="hud-fuel" class="hud fuel">
@@ -60,9 +62,6 @@
       <button id="tour-next" type="button" class="tour-next">Next</button>
     </div>
   </section>
-
-  <!-- @spec TOUR-013: free flight stands in for the main game until it exists -->
-  <div id="free-note" class="hud free-note" hidden>Free flight · full game coming soon</div>
 
   <!-- @spec TOUR-002: replay the getting-started tour -->
   <button id="tour-replay" type="button" class="tour-replay" aria-label="How to play">?</button>

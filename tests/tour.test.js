@@ -221,8 +221,8 @@ test('Back goes one step back on every step up to "Fly!", never during or after 
 });
 
 // @spec TOUR-013
-test('free flight follows the tutorial, with a "coming soon" note on the page', () => {
-  assert.match(html, /id="free-note"[^>]*hidden[^>]*>Free flight · full game coming soon</);
+test('the level follows the tutorial: no "coming soon" free-flight note on the page', () => {
+  assert.doesNotMatch(html, /free-note|coming soon/);
 });
 
 // @spec TOUR-014
