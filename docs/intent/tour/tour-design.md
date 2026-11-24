@@ -24,18 +24,20 @@ The tour is its own component. Its steps, words and rules live in the pure `site
 | 7 | **Your turn: pick a side**: drag down to swing behind the planet (speeds you up) or up to pass in front (slows you down), until the line clears the planet. | Ship; steering is now live | Any plan whose prediction ends in a departure; then Next |
 | 8 | **Fly!**: press Normal or Space; try Slow near the planet. | Time buttons; play is now live | Play starts (moves on by itself; the card hides while flying) |
 | 9 | **How the slingshot works** (mid-flight checkpoint): the planet's gravity bends your path; because it is moving, it drags you along as you swing behind it, or tugs you backwards as you cross in front of it, so that side slows you down. | The game pauses itself just after the closest approach; ring around the ship's arrows | Keep flying |
-| 10 | **Boost!** (behind sped you up by x) or **Brake!** (in front slowed you down by x; this side slows you down, handy for arriving without overshooting). | Speed readout | I'm ready (into free flight), or Try the other side |
+| 10 | **Boost!** (behind sped you up by x) or **Brake!** (in front slowed you down by x; this side slows you down, handy for arriving without overshooting). | Speed readout | I'm ready (into the level), or Try the other side |
 
-If the tour flight crashes, the result card becomes **Bonk! Too close** with **Try again**, which resets the flight and returns to step 7 with a "too close, a little wider" note. If the flight ends without a gain, the result card says **Not quite** and points back to passing behind.
+If the tour flight crashes, the result card becomes **Bonk! Too close** with **Try again**, which resets the flight and returns to step 7 with a "too close, a little wider" note. A flight whose speed changes by more than 0.05 km/s either way is a success: **Boost!** for a gain, **Brake!** for a loss, both offering I'm ready and **Try the other side** (back to step 7 with a "now try the other side" note). A change of 0.05 km/s or less says **Not much changed** and offers Try again. If the tour flight ends without reaching the mid-swing checkpoint (a crash, or a pass too wide to trigger it), the tour goes straight to the result card.
 
-The destination exists only in the story for now; real destinations arrive with the lily-pond map slice.
+The tutorial always uses its own one-planet scenario; it knows nothing about the level's worlds.
+
+The destination in the tutorial is story only: an arrow off the screen's edge. The real destination is Haven, in the level that I'm ready leads to.
 
 ## When It Shows
 
 - **Every load:** the tutorial is the game's front door. It always starts from step 1, the same way, on every visit; nothing is stored on the device.
-- **The way out:** after a successful boost, the last card's button is **I'm ready**. It ends the tutorial and starts **free flight**: the same scenario with every control live and no captions, plus a small "Free flight · full game coming soon" note. Free flight stands in for the main game; when that exists, I'm ready will lead there instead. A flight with no gain, or a crash, offers **Try again** instead.
-- **Skip:** every card has **Skip tour**, which also starts free flight.
-- **Replay:** a round **?** button at the top right ("How to play") resets the flight and starts the tutorial from step 1.
+- **The way out:** after a flight that changed the ship's speed, the last card's button is **I'm ready**. It ends the tutorial and starts **the level** (see `level`). A flight with almost no change, or a crash, offers **Try again** instead.
+- **Skip:** every card has **Skip tour**, which also starts the level.
+- **Replay:** at any time, including during the level (whose flight is abandoned), a round **?** button at the top right ("How to play") resets the flight and starts the tutorial from step 1.
 
 ## Input During the Tour
 
@@ -44,7 +46,7 @@ The tour teaches one control at a time, so each step allows only what it teaches
 - Steps 1–6: no steering and no play; Next (button, Enter or Space) advances.
 - Step 7: steering (keys and drag) becomes live; play does not.
 - Step 8: play (buttons, Space, 2–4) becomes live.
-- Step 9: R restarts and ends the tour.
+- The result step: R does what the card's main button does (I'm ready, or Try again); during the flight itself, R does nothing.
 
 Pause is always allowed. While the tour runs, the normal centred messages (ready, result, crash) are replaced by the tour card.
 
@@ -57,7 +59,7 @@ Pause is always allowed. While the tour runs, the normal centred messages (ready
 
 ## Analytics
 
-`slingshot_tour_start` (`auto`: 1 on first visit, 0 on replay), `slingshot_tour_complete` (`change`: the tour flight's speed change), `slingshot_tour_skip` (`step`: where it was skipped). Counts only, as in `analytics`.
+`slingshot_tour_start` (`auto`: 1 when the page load starts it, 0 when the ? button does), `slingshot_tour_complete` (`change`: the tour flight's speed change), `slingshot_tour_skip` (`step`: where it was skipped). Counts only, as in `analytics`.
 
 ## Decisions & Alternatives
 
@@ -67,14 +69,14 @@ Pause is always allowed. While the tour runs, the normal centred messages (ready
 | Pacing | Tap to continue | Timed captions | Kids read at different speeds; the same pattern as learn-mandalorian's intro. |
 | Hands-on ending | Plan a pass behind, fly it, see the boost | Explain only | Doing it once is what makes the idea stick, and the boost is the reward. |
 | Input gating | Only the control each step teaches | Everything live | A kid pressing Normal on step 2 would fly off before learning to plan. |
-| Destination | Story only | A real target now | The game has no destinations yet; the marker sets up the lily-pond slice without new rules. |
+| Destination in the tutorial | Story only | A real target in the tutorial | The tutorial teaches one flyby; the real destination belongs to the level that follows it. |
 | Logic location | Pure `tour.js` | Inside `main.js` | The steps and rules are testable without a browser. |
 
 ## Open Questions & Future Decisions
 
 ### Deferred
 1. A second short tour for passing in front (the brake), once players ask.
-2. Real destinations from the lily-pond map slice would turn the story marker into a goal.
+2. Pointing the tutorial's story marker at the level's Haven, so the two read as one journey.
 
 ## References
 

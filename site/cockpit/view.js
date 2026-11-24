@@ -137,3 +137,15 @@ export function flightEvents(prevStatus, status, { change, fuelFraction }) {
   }
   return [];
 }
+
+// The approach readout near the destination: far speed against the catch speed.
+// @spec COCKPIT-HUD-008
+export function approachReadout({ inside, farSpeed, catchSpeed }) {
+  if (!inside) return null;
+  return { text: `Approach ${farSpeed.toFixed(1)} km/s · need under ${catchSpeed}`, ok: farSpeed < catchSpeed };
+}
+
+// The destination's catch ring radius in px (true scale, never under 30), and its off-screen label.
+// @spec COCKPIT-DRAW-012
+export const catchRingRadius = (catchRadiusKm, scale) => Math.max(30, catchRadiusKm / scale);
+export const destinationLabel = (name, distanceKm) => `${name} · ${(Math.round(distanceKm / 1e5) / 10).toFixed(1)}M km`;

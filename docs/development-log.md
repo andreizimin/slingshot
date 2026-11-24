@@ -64,6 +64,14 @@ With the main game next, the way changes are made was fixed first: a dev site at
 
 The coherence check's first run was instructive: it found five flight-sim specs with no test (tests were added) and six cockpit specs still marked as gaps although their feature had shipped the day before.
 
+## 2026-11-24: CO-002, the First Level
+
+The tutorial now leads into the game itself: three drifting worlds with no star. The player starts next to Home and has to reach Haven, arriving slowly enough to be caught, scoring 1–3 stars by the fuel left. See [CO-002](change-orders/CO-002-main-game.md).
+
+**A level is only proven in the engine that runs it.** The first layout was solved in a lighter prototype and failed once turning, spool-up and focus switching were in. The layout that shipped was checked against the game's own physics, including how forgiving it is to a wrong first push.
+
+**A green test suite can still ship a blank screen.** The cockpit has no unit tests in a browser, and a change in the prediction's format broke it on the first frame. A headless browser that reads the console now runs after every physics change.
+
 ## Numbers
 
 | Milestone | Tests | Specs |
@@ -73,6 +81,7 @@ The coherence check's first run was instructive: it found five flight-sim specs 
 | Beta | 42 | 97 |
 | Tutorial | 59 | 113 |
 | CO-001 | 82 | 126 |
+| CO-002 | 108 | 156 |
 
 Counted from the repository at each milestone's commit on `main`.
 

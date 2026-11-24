@@ -4,6 +4,8 @@ import * as view from './view.js';
 import { track } from './analytics.js';
 import * as tours from './tour.js';
 import { stageMarks } from './stage.js';
+import { LEVEL_1 } from '../sim/levels.js';
+import * as level from './level.js';
 
 // Everywhere but production: a DEV badge, and a request to search engines not to index.
 // @spec HOST-012
@@ -30,6 +32,7 @@ const el = {
   fuel: document.getElementById('fuel-fill'),
   planned: document.getElementById('fuel-planned'),
   message: document.getElementById('message'),
+  approach: document.getElementById('approach'),
   buttons: [...document.querySelectorAll('.time button')],
 };
 
@@ -53,7 +56,9 @@ let drag = null;     // { id, x0, y0, x, y } while a pointer is pressed on the c
 const DRAG_DEADZONE = view.DRAG_DEADZONE;
 let feedbackOpen = false; // while the feedback form is open, game input is ignored
 let tour = null;          // getting-started tour state (see tour.js), null when not touring
-let camX = 0;             // camera centre relative to the planet, km (0,0 = planet-centred)
+let scenario = sim.TUTORIAL; // the tutorial while touring, the level otherwise
+let focus = 0;            // the focus world the frame is drawn in (see sim.focusWorld)
+let camX = 0;             // camera centre relative to the focus world, km (0,0 = focus-centred)
 let camY = 0;
 const CLOSE_UP_SCALE = 300; // km per px for the tour's opening close-up on the ship
 let prevStatus = 'flying';
@@ -68,8 +73,10 @@ const stars = Array.from({ length: 140 }, (_, i) => {
 });
 
 // @spec COCKPIT-CTL-005, COCKPIT-CTL-007, COCKPIT-TRAIL-002, COCKPIT-CAM-003
+// @spec LEVEL-009
 function reset() {
-  state = sim.initialState();
+  state = sim.initialState(scenario);
+  focus = sim.focusWorld(state);
   plan = null;
   trail = [];
   prediction = sim.predict(state);
@@ -78,7 +85,17 @@ function reset() {
   carry = 0;
   prevStatus = state.status;
   scale = targetScale();
+  [camX, camY] = targetCamera();
   updateButtons();
+}
+
+const inLevel = () => scenario.end.rule === 'level';
+
+// A position at sim time t, relative to the focus world at that same time.
+// @spec COCKPIT-CAM-001
+function rel(x, y, t) {
+  const w = sim.worldPosition(scenario, focus, t);
+  return { x: x - w.x, y: y - w.y };
 }
 
 // @spec COCKPIT-CAM-004
@@ -97,7 +114,7 @@ function resize() {
 function targetScale() {
   const step = tours.current(tour);
   if (step?.zoom === 'close') return CLOSE_UP_SCALE;
-  return view.targetScale(sim.planetRelativePosition(state), W, H);
+  return view.targetScale(shipRel(), W, H);
 }
 
 // Where the camera wants to look: the ship during the tour's close-up, otherwise the planet.
@@ -105,10 +122,14 @@ function targetScale() {
 function targetCamera() {
   const step = tours.current(tour);
   if (step?.focus === 'ship') {
-    const r = sim.planetRelativePosition(state);
+    const r = shipRel();
     return [r.x, r.y];
   }
   return [0, 0];
+}
+
+function shipRel() {
+  return rel(state.pos.x, state.pos.y, state.t);
 }
 
 // @spec COCKPIT-CAM-001
@@ -130,14 +151,19 @@ function setSetting(next) {
   if (next !== 'paused' && !tours.inputAllowed(tours.current(tour), 'time')) return;
   if (next === 'paused') {
     if (setting !== 'paused') resumeTo = setting;
+    // @spec COCKPIT-PRED-004 — the prediction is computed when pausing, not while running.
+    if (setting !== 'paused') prediction = sim.predict(plan ?? state);
     setting = 'paused';
   } else {
     // @spec COCKPIT-CTL-011 — resuming commits the planned course and charges its fuel.
     if (plan) { state = plan; plan = null; }
     // @spec TOUR-014 — remember which side the tutorial flight takes, for the checkpoint's words.
     if (tours.current(tour)?.id === 'fly') tour = { ...tour, side: tours.sideOf(state.planDv) };
-    // @spec ANA-002 — a flight is launched when play starts from the ready state.
-    if (ready) { const ev = view.launchEvent(state.planDv); track(ev.name, ev.data); }
+    // @spec ANA-002, LEVEL-012 — a flight is launched when play starts from the ready state.
+    if (ready) {
+      const ev = inLevel() ? level.launchEvent() : view.launchEvent(state.planDv);
+      track(ev.name, ev.data);
+    }
     setting = next;
     resumeTo = next;
     ready = false;
@@ -278,8 +304,9 @@ function arrow(x1, y1, x2, y2, color, width) {
 // along the planet→star line, pointing toward the star.
 // @spec COCKPIT-DRAW-005
 function drawStarArrow() {
+  if (!scenario.starGM) return;
   const narrow = W < 600;
-  const p = sim.planetPosition(state.t);
+  const p = sim.worldPosition(scenario, focus, state.t);
   const a = Math.atan2(p.y, -p.x); // screen angle toward the star (world origin), y flipped
   const r = narrow ? 18 : 22;
   const { cx, cy } = view.sunBadgePosition(a, W, H, r, narrow);
@@ -357,10 +384,11 @@ function drawTrail() {
   ctx.setLineDash([]);
   ctx.beginPath();
   trail.forEach((p, i) => {
-    const [x, y] = pathPoint(p.x, p.y);
+    const r = rel(p.x, p.y, p.t);
+    const [x, y] = pathPoint(r.x, r.y);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
-  const r = sim.planetRelativePosition(state);
+  const r = shipRel();
   ctx.lineTo(...shipScreenPos(r));
   ctx.stroke();
 }
@@ -377,10 +405,11 @@ function drawPrediction(now = 0) {
   ctx.setLineDash([10, 9]);
   ctx.lineDashOffset = -(t * 38) % 19; // negative offset moves dashes forward along the drawn path
   ctx.beginPath();
-  const r = sim.planetRelativePosition(state);
+  const r = shipRel();
   ctx.moveTo(...shipScreenPos(r));
   for (const p of prediction.points) {
-    ctx.lineTo(...pathPoint(p.ship.x - p.planet.x, p.ship.y - p.planet.y));
+    const r = rel(p.ship.x, p.ship.y, p.t);
+    ctx.lineTo(...pathPoint(r.x, r.y));
   }
   ctx.stroke();
   ctx.setLineDash([]);
@@ -391,10 +420,20 @@ function planetDrawRadius() {
   return view.planetDrawRadius(sim.PLANET_RADIUS, scale);
 }
 
-// @spec COCKPIT-DRAW-002
-function drawPlanet() {
+// Every world at its current position; the focus world sits at the frame's origin.
+// @spec COCKPIT-DRAW-002, COCKPIT-DRAW-005, COCKPIT-DRAW-011
+function drawWorlds() {
+  scenario.worlds.forEach((w, i) => {
+    const p = sim.worldPosition(scenario, i, state.t);
+    const r = rel(p.x, p.y, state.t);
+    const [cx, cy] = toScreen(r.x, r.y);
+    const v = sim.worldVelocity(scenario, i, state.t);
+    drawPlanet(cx, cy, Math.atan2(-v.y, v.x), i === focus, inLevel() ? w.name : null);
+  });
+}
+
+function drawPlanet(cx, cy, heading, isFocus, name) {
   const R = planetDrawRadius();
-  const [cx, cy] = planetScreen();
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -420,12 +459,47 @@ function drawPlanet() {
   ctx.fill();
   ctx.restore();
 
-  // Planet-motion cue: world +y is screen up.
-  arrow(cx, cy - R - 10, cx, cy - R - 62, '#fbbf24', 3);
-  ctx.fillStyle = '#fcd34d';
-  ctx.font = '700 15px Nunito, system-ui, sans-serif';
-  ctx.fillText('planet moving', cx + 18, cy - R - 54);
-  ctx.fillText('this way', cx + 18, cy - R - 36);
+  // World-motion cue along its velocity in the scenario's frame.
+  const ux = Math.cos(heading), uy = Math.sin(heading);
+  arrow(cx + ux * (R + 10), cy + uy * (R + 10), cx + ux * (R + 62), cy + uy * (R + 62), '#fbbf24', 3);
+  if (isFocus) {
+    ctx.fillStyle = '#fcd34d';
+    ctx.font = '700 15px Nunito, system-ui, sans-serif';
+    const lx = cx + ux * (R + 54) + 18, ly = cy + uy * (R + 54);
+    ctx.fillText('planet moving', lx, ly);
+    ctx.fillText('this way', lx, ly + 18);
+  }
+  if (name) pill(name, cx, cy + R + 22, '#f3d3a6', 'center');
+}
+
+// The destination's catch ring, and an edge arrow to it while it is off screen.
+// @spec COCKPIT-DRAW-012
+function drawDestinationMarker(now) {
+  if (!inLevel()) return;
+  const d = scenario.end.destination;
+  const p = sim.worldPosition(scenario, d, state.t);
+  const r = rel(p.x, p.y, state.t);
+  const [cx, cy] = toScreen(r.x, r.y);
+  const pulse = REDUCED_MOTION ? 1 : 0.5 + 0.5 * Math.sin(now / 400);
+  ctx.save();
+  ctx.strokeStyle = `rgba(167, 243, 208, ${0.35 + 0.35 * pulse})`;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.arc(cx, cy, view.catchRingRadius(scenario.end.catchRadius, scale), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+  // Keep the edge arrow inside a box clear of the HUD bands (top 170 px, bottom 110 px).
+  const side = W < 600 ? 40 : 60, top = 190, bottom = 130;
+  if (cx >= 0 && cx <= W && cy >= 0 && cy <= H) return;
+  const ox = W / 2, oy = (top + H - bottom) / 2;
+  const a = Math.atan2(cy - oy, cx - ox);
+  const k = Math.min((W / 2 - side) / Math.abs(Math.cos(a) || 1e-9), ((H - bottom - top) / 2) / Math.abs(Math.sin(a) || 1e-9));
+  const ex = ox + Math.cos(a) * k, ey = oy + Math.sin(a) * k;
+  arrow(ex - Math.cos(a) * 34, ey - Math.sin(a) * 34, ex, ey, 'rgba(167, 243, 208, 0.95)', 3);
+  const dist = Math.hypot(state.pos.x - p.x, state.pos.y - p.y);
+  const align = Math.cos(a) > 0.3 ? 'right' : Math.cos(a) < -0.3 ? 'left' : 'center';
+  pill(view.destinationLabel(scenario.worlds[d].name, dist), ex - Math.cos(a) * 44, ey - Math.sin(a) * 44 + (Math.sin(a) > 0 ? -16 : 16), '#a7f3d0', align);
 }
 
 // @spec COCKPIT-DRAW-001, COCKPIT-DRAW-003, COCKPIT-DRAW-004
@@ -438,7 +512,7 @@ function shipScreenPos(r) {
 }
 
 function drawShip() {
-  const r = sim.planetRelativePosition(state);
+  const r = shipRel();
   const [x, y] = shipScreenPos(r);
   // Nose follows the ship's heading (world +y is screen up, so negate).
   const angle = -state.heading;
@@ -495,7 +569,7 @@ const SIDE_MIN_PX = 30;        // never let a non-zero sideways arrow hide under
 const SHIP_CLEAR_PX = 16;      // arrows start just outside the ship body
 function drawSpeedArrows() {
   if (state.status !== 'flying') return;
-  const rel = sim.planetRelativePosition(state);
+  const rel = shipRel();
   const [x, y] = shipScreenPos(rel);
   const { toward, side } = sim.axes(state);
   const c = sim.speedComponents(state);
@@ -571,14 +645,34 @@ function updateHud() {
   const ch = view.changeReadout(sim.speedChange(state));
   el.change.className = `change ${ch.tone}`;
   el.change.textContent = ch.text;
-  const bar = view.fuelBar(state.fuel, (plan ?? state).planDv, sim.FUEL_DV);
+  const bar = view.fuelBar(state.fuel, (plan ?? state).planDv, scenario.fuel);
   el.fuel.style.width = `${(bar.solid * 100).toFixed(1)}%`;
   el.planned.style.width = `${(bar.striped * 100).toFixed(1)}%`;
   el.fuel.classList.toggle('low', bar.low);
+  // @spec COCKPIT-HUD-008
+  let a = null;
+  if (inLevel() && state.status === 'flying') {
+    const d = scenario.end.destination;
+    const p = sim.worldPosition(scenario, d, state.t);
+    a = view.approachReadout({
+      inside: Math.hypot(state.pos.x - p.x, state.pos.y - p.y) < scenario.end.catchRadius,
+      farSpeed: sim.farSpeed(state, d),
+      catchSpeed: scenario.end.catchSpeed,
+    });
+  }
+  el.approach.hidden = !a;
+  if (a) { el.approach.textContent = a.text; el.approach.classList.toggle('ok', a.ok); }
 }
 
 // @spec COCKPIT-MSG-001, COCKPIT-MSG-002, COCKPIT-MSG-003
+// @spec COCKPIT-MSG-004, LEVEL-007, LEVEL-008
 function updateMessage() {
+  if (inLevel()) {
+    const card = state.status === 'flying' ? (ready ? level.READY_CARD : null) : level.resultCard(state, scenario);
+    const html = card ? card.html + (card.button ? `<br><button type="button" id="message-button">${card.button}</button>` : '') : null;
+    showMessage(html);
+    return;
+  }
   const msg = view.messageFor({
     status: state.status,
     ready,
@@ -587,14 +681,22 @@ function updateMessage() {
     fuelFraction: state.fuel / sim.FUEL_DV,
   });
   // While touring, the tour card does the talking.
-  const html = msg && !tour ? msg.html : null;
+  showMessage(msg && !tour ? msg.html : null);
+}
+
+function showMessage(html) {
   if (html === null) {
     el.message.hidden = true;
   } else {
-    if (el.message.innerHTML !== html) el.message.innerHTML = html;
+    if (el.message.dataset.html !== html) { el.message.innerHTML = html; el.message.dataset.html = html; }
     el.message.hidden = false;
   }
 }
+
+// @spec LEVEL-009 — the result card's button restarts the level.
+el.message.addEventListener('click', (e) => {
+  if (e.target.id === 'message-button') { reset(); e.target.blur(); }
+});
 
 // ---------- getting-started tour ----------
 
@@ -610,10 +712,10 @@ const tourEl = {
   replay: document.getElementById('tour-replay'),
 };
 const HUD_TARGETS = ['hud-speed', 'hud-fuel', 'hud-time'];
-const freeNote = document.getElementById('free-note');
 
 // @spec TOUR-002
 function startTour(auto) {
+  scenario = sim.TUTORIAL;
   reset();
   tour = tours.start();
   track('tour_start', { auto: auto ? 1 : 0 });
@@ -624,7 +726,8 @@ function endTour(how) {
   tour = null;
   if (how === 'skip') track('tour_skip', { step: step ? tours.stepIndex(step.id) + 1 : 0 });
   else track('tour_complete', { change: Math.round(sim.speedChange(state) * 10) / 10 });
-  // @spec TOUR-013 — leaving the tutorial (I'm ready, or Skip) starts free flight from the beginning.
+  // @spec TOUR-013, LEVEL-010 — leaving the tutorial (I'm ready, or Skip) starts the level.
+  scenario = LEVEL_1;
   reset();
   for (const id of HUD_TARGETS) document.getElementById(id)?.classList.remove('tour-target');
   tourEl.card.hidden = true;
@@ -709,7 +812,7 @@ function updateTourCard() {
 // Place the card beside the highlighted world thing, kept on screen (desktop; phones dock it).
 function placeCardNearWorld(step) {
   if (W < 600) { tourEl.card.style.left = ''; tourEl.card.style.top = ''; return; }
-  const [tx, ty] = step.target === 'planet' ? planetScreen() : shipScreenPos(sim.planetRelativePosition(state));
+  const [tx, ty] = step.target === 'planet' ? planetScreen() : shipScreenPos(shipRel());
   const cw = tourEl.card.offsetWidth || 340;
   const chh = tourEl.card.offsetHeight || 160;
   let x = tx + 60;
@@ -730,7 +833,7 @@ function drawTourHighlight(now) {
   let x, y, r;
   if (step.target === 'planet') { [x, y] = planetScreen(); r = planetDrawRadius() + 16; }
   else if (step.target === 'ship' || step.target === 'arrows') {
-    [x, y] = shipScreenPos(sim.planetRelativePosition(state));
+    [x, y] = shipScreenPos(shipRel());
     r = step.target === 'arrows' ? 70 : 30;
   } else return;
   const pulse = REDUCED_MOTION ? 1 : 0.5 + 0.5 * Math.sin(now / 260);
@@ -786,7 +889,16 @@ function frame(now) {
     thrustedThisFrame = out.thrusted;
     for (const p of out.samples) trail.push(p);
     if (trail.length > TRAIL_MAX) trail.splice(0, trail.length - TRAIL_MAX);
-    prediction = sim.predict(state);
+    // @spec COCKPIT-PRED-004 — no prediction is computed while running (pausing recomputes it).
+    if (setting === 'paused') prediction = sim.predict(state);
+    // @spec COCKPIT-CAM-006 — on a focus change, redraw in the new world's frame; the camera eases across.
+    const nf = sim.focusWorld(state);
+    if (nf !== focus) {
+      const a = sim.worldPosition(scenario, focus, state.t), b = sim.worldPosition(scenario, nf, state.t);
+      camX += a.x - b.x;
+      camY += a.y - b.y;
+      focus = nf;
+    }
   } else if (setting === 'paused' && dir && state.status === 'flying') {
     // @spec COCKPIT-CTL-008 — pause-and-plan: shape a planned course; fuel is charged on resume.
     const base = plan ?? state;
@@ -799,11 +911,12 @@ function frame(now) {
     }
   }
 
-  // @spec ANA-003 — report how a flight ended, once, when the status changes.
-  for (const ev of view.flightEvents(prevStatus, state.status, {
+  // @spec ANA-003, LEVEL-012 — report how a flight ended, once, when the status changes.
+  const ends = inLevel() ? level.endEvents(prevStatus, state, scenario) : view.flightEvents(prevStatus, state.status, {
     change: sim.speedChange(state),
     fuelFraction: state.fuel / sim.FUEL_DV,
-  })) track(ev.name, ev.data);
+  });
+  for (const ev of ends) track(ev.name, ev.data);
   prevStatus = state.status;
 
   // @spec TOUR-003 — steps that move on by themselves (pressing play on "Fly!").
@@ -811,7 +924,7 @@ function frame(now) {
   if (step && tours.autoAdvances(step) && tours.conditionMet(step, tourContext())) tour = tours.next(tour);
   // @spec TOUR-011 — mid-swing checkpoint: pause just after the closest point to the planet.
   if (step?.id === 'swing') {
-    const rel = sim.planetRelativePosition(state);
+    const rel = shipRel();
     if (state.status !== 'flying') {
       tour = { ...tour, index: tours.stepIndex('result') };
     } else if (tours.swingCheckpointDue(tour, { distance: Math.hypot(rel.x, rel.y), closest: state.closest })) {
@@ -829,7 +942,8 @@ function frame(now) {
   drawStarArrow();
   drawTrail();
   drawPrediction(now);
-  drawPlanet();
+  drawDestinationMarker(now);
+  drawWorlds();
   drawShip();
   drawSpeedArrows();
   drawDestination();
@@ -838,15 +952,14 @@ function frame(now) {
   updateHud();
   updateMessage();
   updateTourCard();
-  freeNote.hidden = !!tour; // @spec TOUR-013 — free flight stands in for the main game for now
 
   requestAnimationFrame(frame);
 }
 
 resize();
-reset();
 // @spec TOUR-002 — the tutorial always starts, the same way, on every load.
 if (tours.startsOnLoad()) startTour(true);
+else { scenario = LEVEL_1; reset(); }
 camX = targetCamera()[0];
 camY = targetCamera()[1];
 scale = targetScale();

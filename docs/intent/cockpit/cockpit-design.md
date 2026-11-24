@@ -11,13 +11,15 @@ The cockpit is everything the player sees and touches: a full-window canvas, the
 
 It owns presentation only. It never computes gravity or changes physics values; it converts sim kilometres into pixels and nothing flows back the other way. What a kid needs to see comes first: one big number, one line, one bar. Debug data stays off the default screen.
 
-## Camera: the Planet's Frame
+## Camera: the Focus World's Frame
 
-The view is centred on the planet and moves with it. Positions are drawn as `ship − planet` at the same sim time, so:
+The view is centred on the **focus world** (the world nearest the ship, see `flight-sim`) and moves with it. In the tutorial that is always the one planet. Positions are drawn as `ship − focus world` at the same sim time, so:
 
-- The planet sits still in the middle of the screen.
-- The prediction line is drawn as each predicted ship point minus the planet position recorded with it. It shows the clean hyperbola the ship traces around the planet, which is the shape a kid can steer.
-- The past trail is drawn from the planet-relative samples the sim returns every 10 steps (`advance`'s `samples`), capped at the most recent 3,000. Reset clears it. Paused frames add nothing.
+- The focus world sits still in the middle of the screen.
+- The prediction line is drawn as each predicted ship point minus the focus world's position at that point's time. It shows the clean hyperbola the ship traces around the planet, which is the shape a kid can steer.
+- The past trail is drawn from the samples the sim returns every 10 steps (`advance`'s `samples`: position and time), each drawn relative to the focus world's position at its own time, capped at the most recent 3,000. Reset clears it. Paused frames add nothing.
+
+When the focus changes from one world to another, the camera eases over to the new world, so the picture glides rather than jumps. Because each world drifts at a constant velocity, every world's frame is an honest inertial view; switching frames re-draws the trail as seen from the new world.
 
 The direction the planet is moving (`+y` in the world, drawn as **up** on screen) is shown as a short arrow beside the planet labelled "planet moving this way". With that arrow, "behind" (below the planet) and "in front" (above it) are visible without explanation. A faint arrow at the screen edge points toward the star.
 
@@ -25,21 +27,34 @@ World `+x` is screen right and world `+y` is screen up. The view does not rotate
 
 ### Auto-zoom and storybook proportions
 
-The scale (km per pixel) follows the ship's distance from the planet, so the ship and the planet are always on screen together:
+The scale (km per pixel) follows the ship's distance from the focus world, so the ship and the world it is steering by are always on screen together:
 
-- Target scale: the ship-to-planet distance spans 35% of the smaller screen dimension, clamped between a closest zoom of 1,000 km/px and a widest zoom of 20,000 km/px.
+- Target scale: the ship-to-focus-world distance spans 35% of the smaller screen dimension, clamped between a closest zoom of 1,000 km/px and a widest zoom of 20,000 km/px.
 - **Safe area.** The target scale is also never smaller than needed to keep the ship inside the area clear of the HUD: 170 px below the top edge (speed readout), 110 px above the bottom edge (time buttons), and 40 px in from each side.
-- The scale eases toward the target by 15% per frame, so zooming never jumps. On load and on reset it snaps straight to the target.
+- The scale eases toward the target by 15% per frame, and the camera centre eases toward its target by 12% per frame, so neither a zoom nor a change of focus world ever jumps. On load and on reset both snap straight to their targets.
 
 Drawn sizes are decoupled from physical sizes:
 
-- The **ship** is always drawn 12 px across, a small rocket shape pointing along its planet-frame velocity, with a flame on the side opposite any active burn.
-- The **planet** is drawn with radius `max(PLANET_RADIUS / scale, 24 px)`, with Jupiter-like bands. When zoomed out it is inflated to stay visible; when zoomed in close enough, its drawn edge is its true edge.
-- **No false overlaps.** While the ship is flying, if its drawn centre would fall inside the drawn planet plus 8 px (the zoom is still catching up, or the planet is inflated), the ship is drawn on the same bearing from the planet centre at exactly that drawn radius plus 8 px. Only a real crash draws the ship touching the planet. This changes only where the ship is painted, never the sim state.
+- The **ship** is always drawn 12 px across, a small rocket pointing along its heading, with a flame from its tail while the engine fires.
+- **Every world** is drawn with radius `max(its radius / scale, 24 px)`, with Jupiter-like bands. When zoomed out it is inflated to stay visible; when zoomed in close enough, its drawn edge is its true edge.
+- **No false overlaps.** Around the focus world, the ship, the trail and the prediction line are drawn through a smooth radial remap: a point at true screen distance `d` from the focus world's centre is drawn at `√(d² + K²)` on the same bearing, with `K² = (drawn radius + 6 px)² − (true radius in px)²` (zero when the world is not inflated). Close passes bend smoothly around the drawn world instead of crossing it; far points barely move. Only a crashed ship is drawn at its true position. Worlds that are not the focus are far from the ship whenever they are not the focus, so no remap is applied around them. All of this changes only where things are painted, never the sim state.
 
 The canvas fills the window, resizes with it, and renders at the device pixel ratio so shapes stay crisp.
 
 The star is not drawn in the planet-frame view (it is about 780 million km away), only its direction arrow.
+
+## In the Level
+
+The level (`level` node) is a pond of drifting worlds. Besides following the focus world:
+
+- **Every world is drawn** (one draw per world, each frame), each with its name in a small pill, at its current position in the focus world's frame. Each world has its own "moving this way" arrow, showing its drift relative to the pond.
+- **Changing focus.** When the focus world changes (see `flight-sim`: only once another world is 10% nearer), the trail and the prediction line are redrawn at once in the new world's frame while the camera eases across.
+- **Speed.** "Your speed" is the pond-frame speed, and its change is measured from the level's starting speed.
+- **No Star badge.** The level has no star; the badge appears only in scenarios that have one.
+- **Destination marker.** Haven is marked with a pulsing ring at its catch radius, drawn at true scale but never smaller than 30 px. While Haven is off screen, an arrow at the screen edge points to it, labelled "Haven" with its distance in million km.
+- **Approach readout.** While the ship is within the catch radius, a pill under the speed readout shows the far speed relative to Haven (the flight sim's `farSpeed`) against the catch speed, e.g. "Approach 7.2 km/s · need under 5", green once it is low enough.
+- **Ready and result cards.** The level has its own texts, decided by the pure `site/cockpit/level.js` (see `level`): the ready card, and the result card (stars and fuel left, "Bonk! You hit <world>", or "Lost in space"). They use the same centred message area as the tutorial's messages. The tutorial's "pick a side", "Bonk! You hit the planet" and Boost/Brake texts appear only in the tutorial.
+- **Which scenario.** The page loads into the tutorial; I'm ready or Skip tour starts the level; ? returns to the tutorial. R restarts whichever is showing.
 
 ## Readouts
 
@@ -101,7 +116,7 @@ The approved visual reference is the cockpit mockup canvas "Slingshot cockpit mo
 
 | Decision | Chosen | Alternatives Considered | Rationale |
 |---|---|---|---|
-| Camera frame | Planet-centred, drawn in the planet's frame | Star-frame view following the ship; fixed star-centred view | In the planet's frame the path is a clean, symmetrical bend and the planet stays put, which is easiest to steer by. A star-centred view at Jupiter's distance makes the flyby invisibly small. The star-frame gain is what the speed number shows. |
+| Camera frame | Centred on the focus world, drawn in its frame | Star-frame view following the ship; fixed star-centred view | In the planet's frame the path is a clean, symmetrical bend and the planet stays put, which is easiest to steer by. A star-centred view at Jupiter's distance makes the flyby invisibly small. The star-frame gain is what the speed number shows. |
 | Behind / in front cue | Planet-motion arrow, world `+y` drawn up | No cue; label the sides | One arrow is enough for "go behind it / go in front of it" and avoids text-heavy labels. |
 | Zoom | Automatic, based on ship–planet distance | Manual zoom keys; fixed scale | Keeps ship and planet on screen with no extra control to learn. A fixed scale cannot show both the 4-million-km approach and a near-surface pass. |
 | Ship and paths near an inflated planet | Smooth radial remap: distance d drawn at √(d² + K²), so the true surface lands just outside the drawn edge | Push points out to the edge; rely on zoom alone | Zoom eases and can lag, and an inflated planet would otherwise swallow close passes. A hard push-out made paths hug the edge with kinks; the smooth remap keeps an elliptical-looking swing and never folds. |
