@@ -9,8 +9,8 @@ const paused = { planDv: 0, predictionEnding: 'crashed', setting: 'paused', stat
 const at = (id, extra = {}) => ({ active: true, index: tour.stepIndex(id), ...extra });
 
 // @spec TOUR-001
-test('the tour has the ten storyboard steps in order, opening on a close-up of the ship', () => {
-  assert.deepEqual(tour.STEPS.map((s) => s.id), ['ship', 'planet', 'speed', 'arrows', 'fuel', 'plan', 'try', 'fly', 'swing', 'result']);
+test('the tour has the eight storyboard steps in order, opening on a close-up of the ship', () => {
+  assert.deepEqual(tour.STEPS.map((s) => s.id), ['ship', 'planet', 'speed', 'plan', 'try', 'fly', 'swing', 'result']);
   const first = tour.STEPS[0];
   assert.equal(first.focus, 'ship');
   assert.equal(first.zoom, 'close');
@@ -19,13 +19,22 @@ test('the tour has the ten storyboard steps in order, opening on a close-up of t
   assert.match(first.text, /destination/i);
   for (const s of tour.STEPS.slice(0, -1)) assert.ok(s.title && s.text, `${s.id} has words`);
   assert.equal(tour.STEPS.find((s) => s.id === 'speed').target, 'hud-speed');
-  assert.equal(tour.STEPS.find((s) => s.id === 'fuel').target, 'hud-fuel');
+  const speed = tour.STEPS.find((s) => s.id === 'speed');
+  assert.match(speed.title, /Your speed/);
+  assert.match(speed.text, /Grey/);
+  assert.match(speed.text, /Orange/);
+  const plan = tour.STEPS.find((s) => s.id === 'plan');
+  assert.equal(plan.title, 'Fuel, and planning is free');
+  assert.equal(plan.target, 'hud-fuel');
+  assert.match(plan.text, /fuel/i);
+  assert.match(plan.text, /dashed line/);
   assert.equal(tour.STEPS.find((s) => s.id === 'fly').target, 'hud-time');
 });
 
 // @spec TOUR-002
-test('the tutorial starts on every load, and a ? button replays it', () => {
-  assert.equal(tour.startsOnLoad(), true);
+test('the tutorial starts from Tutorial on the start screen, and a ? button replays it', () => {
+  assert.equal(tour.DOOR.choices.find((c) => c.id === 'tutorial').label, 'Tutorial');
+  assert.deepEqual(tour.start(), { active: true, index: 0 });
   assert.match(html, /id="tour-replay"[^>]*aria-label="How to play"/, 'a ? button replays the tour');
 });
 
@@ -79,7 +88,7 @@ test('cards show while paused; the result card waits for the flight to end', () 
   assert.equal(tour.cardVisible(null, paused), false);
   const card = tour.cardFor(at('speed'), paused);
   assert.equal(card.n, 3);
-  assert.equal(card.of, 10);
+  assert.equal(card.of, 8);
   assert.match(html, /id="tour-card"[^>]*hidden/, 'card hidden until the tour shows it');
   assert.match(html, /id="tour-skip"/, 'skippable');
 });
@@ -128,10 +137,13 @@ test('a crash on the tour flight explains why and sends the player back to "Your
 // @spec TOUR-006
 test('during the tour only the input each step teaches is live', () => {
   const step = (id) => tour.current(at(id));
-  for (const id of ['ship', 'planet', 'speed', 'arrows', 'fuel', 'plan']) {
+  for (const id of ['ship', 'planet', 'speed']) {
     assert.equal(tour.inputAllowed(step(id), 'push'), false, `${id}: no steering yet`);
     assert.equal(tour.inputAllowed(step(id), 'time'), false, `${id}: no flying yet`);
   }
+  // "Fuel, and planning is free" says "drag to plan": the drag must move the line (ZZF-91).
+  assert.equal(tour.inputAllowed(step('plan'), 'push'), true, 'plan: steering is live');
+  assert.equal(tour.inputAllowed(step('plan'), 'time'), false, 'plan: no flying yet');
   assert.equal(tour.inputAllowed(step('try'), 'push'), true);
   assert.equal(tour.inputAllowed(step('try'), 'time'), false);
   assert.equal(tour.inputAllowed(step('fly'), 'time'), true);
@@ -211,8 +223,8 @@ test('in the real physics, the checkpoint fires mid-swing close to the planet', 
 // @spec TOUR-012
 test('Back goes one step back on every step up to "Fly!", never during or after the flight', () => {
   assert.equal(tour.canGoBack(tour.start()), false, 'nothing before step 1');
-  const back = tour.prev(at('fuel'));
-  assert.equal(tour.current(back).id, 'arrows');
+  const back = tour.prev(at('plan'));
+  assert.equal(tour.current(back).id, 'speed');
   assert.equal(tour.current(tour.prev(at('fly'))).id, 'try');
   assert.equal(tour.canGoBack(at('swing')), false);
   assert.equal(tour.canGoBack(at('result')), false);
@@ -234,4 +246,24 @@ test('the side chosen at launch survives the move from "Fly!" to the checkpoint'
   assert.match(tour.cardFor(swing, { ...paused, status: 'flying' }).text, /slows you down/);
   assert.equal(tour.next(swing).side, 'front', 'kept into the result step too');
   assert.match(tour.STEPS.find((s) => s.id === 'speed').text, /up, or pull it down/);
+});
+
+// @spec TOUR-015
+test('the start screen offers Tutorial or Sample mission; only Enter (Tutorial) acts on it', () => {
+  assert.equal(tour.DOOR.title, 'Slingshot');
+  assert.match(tour.DOOR.text, /fuel/);
+  assert.deepEqual(tour.DOOR.choices.map((c) => [c.id, c.label]), [['tutorial', 'Tutorial'], ['mission', 'Sample mission']]);
+  assert.equal(tour.doorKey('Enter'), 'tutorial');
+  for (const k of [' ', 'r', 'R', 'ArrowUp', 'ArrowDown', '3']) assert.equal(tour.doorKey(k), null, `${k} does nothing`);
+  assert.match(html, /id="door"[^>]*>/, 'start screen in the page');
+  assert.match(html, /id="door-tutorial"/);
+  assert.match(html, /id="door-mission"/);
+});
+
+// @spec TOUR-016
+test('the card docks in the strip above the time buttons, centred, at most 640 px wide', () => {
+  assert.deepEqual(tour.cardStrip(1316, 725), { left: 338, width: 640, bottom: 709 });
+  assert.deepEqual(tour.cardStrip(950, 613), { left: 155, width: 640, bottom: 597 });
+  assert.deepEqual(tour.cardStrip(390, 780), { left: 16, width: 358, bottom: 712 }, 'phones: clear of the feedback button');
+  assert.equal(tour.STEPS.some((s) => 'anchor' in s), false, 'no step positions its card');
 });

@@ -33,6 +33,7 @@ The tracker reports a page view on load. The game has one page, so views are vis
 | `slingshot_crash` | The sim status changes from `flying` to `crashed` (tutorial) | `fuel_left` (%) |
 | `slingshot_level_start` | The level starts or restarts | none |
 | `slingshot_level_end` | A level flight ends | `outcome` (`arrived`, `crashed`, `lost`), `fuel_left` (%), `stars` (0–3) |
+| `slingshot_start_choice` | The player picks on the start screen | `choice` (`tutorial` or `mission`) |
 
 The end-of-flight events come from `flightEvents(prevStatus, status, …)` in `site/cockpit/view.js`, a pure function, so "sent once per flight" is unit-tested. The cockpit's frame loop sends whatever it returns.
 

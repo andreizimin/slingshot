@@ -10,12 +10,16 @@ export const DRAG_DEADZONE = 24;
 // clamped, and never so zoomed-in that the ship leaves the area clear of the HUD.
 // rel = ship position relative to the planet, in km (world axes, +y up).
 // @spec COCKPIT-CAM-002, COCKPIT-CAM-005
-export function targetScale(rel, W, H) {
+// playBottom: the bottom of the play area (the card strip's top while a tour card shows; else H).
+// @spec COCKPIT-CAM-007
+export function targetScale(rel, W, H, playBottom = H) {
   const d = Math.hypot(rel.x, rel.y);
-  const m = Math.min(W, H) || 800;
+  const top = playBottom < H ? playTop(W) : 0;
+  const cy = (top + playBottom) / 2;
+  const m = Math.min(W, playBottom - top) || 800;
   let s = Math.min(SCALE_MAX, Math.max(SCALE_MIN, d / (0.35 * m)));
-  const availUp = Math.max(40, H / 2 - 170);
-  const availDown = Math.max(40, H / 2 - 110);
+  const availUp = Math.max(40, cy - 170);
+  const availDown = Math.max(40, playBottom - cy - 110);
   const availX = Math.max(40, W / 2 - (W < 600 ? 60 : 110));
   s = Math.max(s, Math.abs(rel.x) / availX, rel.y > 0 ? rel.y / availUp : -rel.y / availDown);
   return s;
@@ -149,3 +153,11 @@ export function approachReadout({ inside, farSpeed, catchSpeed }) {
 // @spec COCKPIT-DRAW-012
 export const catchRingRadius = (catchRadiusKm, scale) => Math.max(30, catchRadiusKm / scale);
 export const destinationLabel = (name, distanceKm) => `${name} · ${(Math.round(distanceKm / 1e5) / 10).toFixed(1)}M km`;
+
+// Where the camera centre is drawn: the centre of the play area.
+// @spec COCKPIT-CAM-007
+const playTop = (W) => (W < 600 ? 120 : 180);
+export const playCentre = (W, H, playBottom = H) => [W / 2, ((playBottom < H ? playTop(W) : 0) + playBottom) / 2];
+
+// @spec ANA-008
+export const choiceEvent = (choice) => ({ name: 'start_choice', data: { choice: choice === 'mission' ? 'mission' : 'tutorial' } });

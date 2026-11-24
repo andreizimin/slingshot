@@ -56,6 +56,7 @@ let drag = null;     // { id, x0, y0, x, y } while a pointer is pressed on the c
 const DRAG_DEADZONE = view.DRAG_DEADZONE;
 let feedbackOpen = false; // while the feedback form is open, game input is ignored
 let tour = null;          // getting-started tour state (see tour.js), null when not touring
+let door = true;          // the start screen is up (TOUR-015); every load opens on it
 let scenario = sim.TUTORIAL; // the tutorial while touring, the level otherwise
 let focus = 0;            // the focus world the frame is drawn in (see sim.focusWorld)
 let camX = 0;             // camera centre relative to the focus world, km (0,0 = focus-centred)
@@ -114,7 +115,7 @@ function resize() {
 function targetScale() {
   const step = tours.current(tour);
   if (step?.zoom === 'close') return CLOSE_UP_SCALE;
-  return view.targetScale(shipRel(), W, H);
+  return view.targetScale(shipRel(), W, H, playBottom());
 }
 
 // Where the camera wants to look: the ship during the tour's close-up, otherwise the planet.
@@ -132,9 +133,17 @@ function shipRel() {
   return rel(state.pos.x, state.pos.y, state.t);
 }
 
-// @spec COCKPIT-CAM-001
+// The bottom of the play area: the card strip's top while a tour card shows, else the canvas bottom.
+// @spec COCKPIT-CAM-007
+function playBottom() {
+  if (!tourEl.card.hidden && tourEl.card.offsetHeight) return Math.max(200, tourEl.card.getBoundingClientRect().top);
+  return H;
+}
+
+// @spec COCKPIT-CAM-001, COCKPIT-CAM-007
 function toScreen(rx, ry) {
-  return [W / 2 + (rx - camX) / scale, H / 2 - (ry - camY) / scale];
+  const [ox, oy] = view.playCentre(W, H, playBottom());
+  return [ox + (rx - camX) / scale, oy - (ry - camY) / scale];
 }
 
 // The planet's centre on screen (the screen centre unless the camera is looking elsewhere).
@@ -149,6 +158,7 @@ const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight
 function setSetting(next) {
   // @spec TOUR-006 — during the tour, play starts only once the tour gets to "Fly!".
   if (next !== 'paused' && !tours.inputAllowed(tours.current(tour), 'time')) return;
+  if (door && next !== 'paused') return; // @spec TOUR-015 — no play from the start screen
   if (next === 'paused') {
     if (setting !== 'paused') resumeTo = setting;
     // @spec COCKPIT-PRED-004 — the prediction is computed when pausing, not while running.
@@ -180,6 +190,12 @@ function togglePause() {
 // @spec COCKPIT-CTL-001, COCKPIT-CTL-002, COCKPIT-CTL-003, COCKPIT-CTL-004, COCKPIT-CTL-006
 window.addEventListener('keydown', (e) => {
   if (feedbackOpen) return; // @spec FEED-002 — typing in the feedback form never steers the ship
+  // @spec TOUR-015 — on the start screen only Enter acts, choosing Tutorial.
+  if (door) {
+    if (ARROWS[e.key] || e.key === ' ' || e.key === 'Enter') e.preventDefault();
+    if (!e.repeat && tours.doorKey(e.key)) chooseDoor(tours.doorKey(e.key));
+    return;
+  }
   const step = tours.current(tour);
   // @spec TOUR-012 — → and ← step through the tour (they never steer: only ↑ ↓ do).
   if (step && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
@@ -612,7 +628,7 @@ function drawSpeedArrows() {
     const [lx, ly, d] = labelAt;
     pill(`${Math.abs(value).toFixed(1)} km/s sideways${planDv !== 0 ? ' (planned)' : ''}`,
       lx + sx * d * 14, ly + sy * d * 14, '#fdba74', 'center');
-  } else if (tours.current(tour)?.id === 'arrows') {
+  } else if (tours.current(tour)?.ring === 'arrows') {
     // The tour explains the sideways arrow before there is any sideways speed: show where it lives.
     arrow(x, y - SHIP_CLEAR_PX * 0.6, x, y - SIDE_MIN_PX, 'rgba(251, 146, 60, 0.6)', 4);
     pill('0.0 km/s sideways: yours to change', x, y - SIDE_MIN_PX - 18, '#fdba74', 'center');
@@ -680,8 +696,8 @@ function updateMessage() {
     change: sim.speedChange(state),
     fuelFraction: state.fuel / sim.FUEL_DV,
   });
-  // While touring, the tour card does the talking.
-  showMessage(msg && !tour ? msg.html : null);
+  // While touring, or on the start screen, the card does the talking.
+  showMessage(msg && !tour && !door ? msg.html : null);
 }
 
 function showMessage(html) {
@@ -710,11 +726,40 @@ const tourEl = {
   back: document.getElementById('tour-back'),
   alt: document.getElementById('tour-alt'),
   replay: document.getElementById('tour-replay'),
+  door: document.getElementById('door'),
+  doorTitle: document.getElementById('door-title'),
+  doorText: document.getElementById('door-text'),
+  doorTutorial: document.getElementById('door-tutorial'),
+  doorMission: document.getElementById('door-mission'),
 };
 const HUD_TARGETS = ['hud-speed', 'hud-fuel', 'hud-time'];
 
+// The start screen: Tutorial or Sample mission.
+// @spec TOUR-015, ANA-008
+function showDoor() {
+  door = true;
+  tourEl.doorTitle.textContent = tours.DOOR.title;
+  tourEl.doorText.textContent = tours.DOOR.text;
+  tourEl.doorTutorial.textContent = tours.DOOR.choices[0].label;
+  tourEl.doorMission.textContent = tours.DOOR.choices[1].label;
+  tourEl.door.hidden = false;
+}
+function chooseDoor(choice) {
+  door = false;
+  tourEl.door.hidden = true;
+  const ev = view.choiceEvent(choice);
+  track(ev.name, ev.data);
+  // @spec LEVEL-010 — Sample mission goes straight to the level.
+  if (choice === 'mission') { scenario = LEVEL_1; reset(); }
+  else startTour(true);
+}
+tourEl.doorTutorial.addEventListener('click', () => chooseDoor('tutorial'));
+tourEl.doorMission.addEventListener('click', () => chooseDoor('mission'));
+
 // @spec TOUR-002
 function startTour(auto) {
+  door = false;
+  tourEl.door.hidden = true;
   scenario = sim.TUTORIAL;
   reset();
   tour = tours.start();
@@ -804,25 +849,17 @@ function updateTourCard() {
   tourEl.back.hidden = !tours.canGoBack(tour);
   tourEl.alt.hidden = !card.secondary;
   if (card.secondary) tourEl.alt.textContent = card.secondary;
-  tourEl.card.dataset.anchor = HUD_TARGETS.includes(step.target) ? step.target : 'world';
-  if (tourEl.card.dataset.anchor === 'world') placeCardNearWorld(step);
-  else { tourEl.card.style.left = ''; tourEl.card.style.top = ''; }
+  placeCardInStrip();
 }
 
-// Place the card beside the highlighted world thing, kept on screen (desktop; phones dock it).
-function placeCardNearWorld(step) {
-  if (W < 600) { tourEl.card.style.left = ''; tourEl.card.style.top = ''; return; }
-  const [tx, ty] = step.target === 'planet' ? planetScreen() : shipScreenPos(shipRel());
-  const cw = tourEl.card.offsetWidth || 340;
-  const chh = tourEl.card.offsetHeight || 160;
-  let x = tx + 60;
-  if (x + cw > W - 20) x = tx - 60 - cw;
-  let y = ty - chh - 40;
-  if (y < 170) y = ty + 50;
-  x = Math.max(20, Math.min(W - cw - 20, x));
-  y = Math.max(20, Math.min(H - chh - 110, y));
-  tourEl.card.style.left = `${x}px`;
-  tourEl.card.style.top = `${y}px`;
+// The card docks in the strip above the time buttons; it is never positioned by its target.
+// @spec TOUR-016
+function placeCardInStrip() {
+  const timeTop = document.getElementById('hud-time').getBoundingClientRect().top || H - 84;
+  const strip = tours.cardStrip(W, timeTop);
+  tourEl.card.style.left = `${strip.left}px`;
+  tourEl.card.style.width = `${strip.width}px`;
+  tourEl.card.style.top = `${Math.max(8, strip.bottom - tourEl.card.offsetHeight)}px`;
 }
 
 // Pulsing ring around the highlighted world thing.
@@ -831,10 +868,11 @@ function drawTourHighlight(now) {
   const step = tours.current(tour);
   if (!step || !tours.cardVisible(step, tourContext())) return;
   let x, y, r;
-  if (step.target === 'planet') { [x, y] = planetScreen(); r = planetDrawRadius() + 16; }
-  else if (step.target === 'ship' || step.target === 'arrows') {
+  const ringTarget = step.ring ?? step.target;
+  if (ringTarget === 'planet') { [x, y] = planetScreen(); r = planetDrawRadius() + 16; }
+  else if (ringTarget === 'ship' || ringTarget === 'arrows') {
     [x, y] = shipScreenPos(shipRel());
-    r = step.target === 'arrows' ? 70 : 30;
+    r = ringTarget === 'arrows' ? 70 : 30;
   } else return;
   const pulse = REDUCED_MOTION ? 1 : 0.5 + 0.5 * Math.sin(now / 260);
   ctx.save();
@@ -878,7 +916,7 @@ function frame(now) {
   lastTime = now;
 
   const wanted = held.length ? held[held.length - 1] : dragDir();
-  const dir = tours.inputAllowed(tours.current(tour), 'push') ? wanted : null;
+  const dir = !door && tours.inputAllowed(tours.current(tour), 'push') ? wanted : null;
   const r = sim.stepsForFrame(setting, elapsed, carry);
   carry = r.carry;
   thrustedThisFrame = false;
@@ -957,9 +995,10 @@ function frame(now) {
 }
 
 resize();
-// @spec TOUR-002 — the tutorial always starts, the same way, on every load.
-if (tours.startsOnLoad()) startTour(true);
-else { scenario = LEVEL_1; reset(); }
+// @spec TOUR-015 — every load opens on the start screen, over the paused tutorial scenario.
+scenario = sim.TUTORIAL;
+reset();
+showDoor();
 camX = targetCamera()[0];
 camY = targetCamera()[1];
 scale = targetScale();

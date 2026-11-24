@@ -10,6 +10,7 @@ Design: `analytics-design.md` · Prefix: `ANA`
 - [x] **ANA-006**: The tour shall send its events through the same `track` function with the `slingshot_` prefix (see TOUR-010).
 
 - [x] **ANA-007**: The level shall send `slingshot_level_start` and `slingshot_level_end` through the same `track` function, as specified by `LEVEL-012`.
+- [x] **ANA-008**: When the player chooses on the start screen, the cockpit shall send `slingshot_start_choice` with `choice` `tutorial` or `mission`.
 
 ## Verified by hand
 

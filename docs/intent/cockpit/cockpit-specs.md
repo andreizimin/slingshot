@@ -10,6 +10,7 @@ Specs whose behaviour lives in the pure `site/cockpit/view.js` are covered by `t
 - [x] **COCKPIT-CAM-002**: The cockpit shall set the target scale so the ship-to-focus-world distance spans 35% of the canvas's smaller dimension, clamped between 1,000 and 20,000 km per CSS pixel, and shall move the current scale linearly 15% of the remaining way toward the target each frame, paused or running.
 - [x] **COCKPIT-CAM-005**: The cockpit shall never set the target scale smaller than needed to keep the ship's drawn position at least 170 px below the top edge, 110 px above the bottom edge, and 110 px from each side (60 px on screens narrower than 600 px) so its speed arrows and labels fit.
 - [x] **COCKPIT-CAM-003**: When the page loads or the player resets, the cockpit shall set the current scale directly to the target scale.
+- [x] **COCKPIT-CAM-007**: While a tour card is shown, the cockpit shall treat the play area as the band between the top readouts (180 px from the top, 120 px on screens narrower than 600 px) and the card's top edge: the camera centre shall be drawn at the play area's centre, and the target scale (`COCKPIT-CAM-002`, `COCKPIT-CAM-005`) shall use the play area's height, the space from that centre up to 170 px from the canvas top, and the space from that centre down to 110 px above the card; otherwise the play area shall be the whole canvas.
 - [x] **COCKPIT-CAM-004**: The cockpit shall fill the browser window with the canvas, resize it when the window resizes, and render at the device pixel ratio.
 
 ## Storybook proportions

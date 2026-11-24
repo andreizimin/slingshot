@@ -13,7 +13,7 @@ It owns presentation only. It never computes gravity or changes physics values; 
 
 ## Camera: the Focus World's Frame
 
-The view is centred on the **focus world** (the world nearest the ship, see `flight-sim`) and moves with it. In the tutorial that is always the one planet. Positions are drawn as `ship − focus world` at the same sim time, so:
+The camera frames the **play area**: the whole canvas, or, while a tour card is shown, the band between the top readouts and the card strip (see `tour`), so nothing the player steers by sits under the card. The view is centred on the **focus world** (the world nearest the ship, see `flight-sim`) and moves with it. In the tutorial that is always the one planet. Positions are drawn as `ship − focus world` at the same sim time, so:
 
 - The focus world sits still in the middle of the screen.
 - The prediction line is drawn as each predicted ship point minus the focus world's position at that point's time. It shows the clean hyperbola the ship traces around the planet, which is the shape a kid can steer.
