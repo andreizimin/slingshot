@@ -121,7 +121,7 @@ Unit tests for the script and choice; by hand on dev at 950×697, 1316×809 and 
 | Hash | Message |
 |---|---|
 | `4738221` | CO-003, CO-004: change orders (ZZF-93, ZZF-90, ZZF-91) |
-| (this commit) | CO-003: start screen, docked tour card, 8-step tutorial, steering on the planning step |
+| `70eab48` | CO-003: start screen, docked tour card, 8-step tutorial, steering on the planning step |
 
 ### Measurements
 
