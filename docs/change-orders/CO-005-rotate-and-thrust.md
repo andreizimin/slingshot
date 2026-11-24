@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | Type | Feature |
-| Status | Proposed |
+| Status | Approved |
 | Requested | 2026-11-24 |
-| Approved | |
+| Approved | 2026-11-24 |
 | Completed | |
 | Ticket | [ZZF-94](https://linear.app/zizify-workshop/issue/ZZF-94) |
 
@@ -100,6 +100,8 @@ Development log entry; the change-order index row.
 - **level:** no layout change expected; if the re-expressed route fails, the level is re-solved with `scripts/design-level.mjs`, a predicted risk.
 
 ## Decisions Needed
+
+None open. Decided on 2026-11-24: 1a (rotating is free), 2a (↓ is reverse thrust), 3a (sideways steering removed), 4a (one drag: horizontal rotates, vertical burns). Defaults kept: absolute angle; a plan is a heading plus a burn.
 
 1. **What does rotating cost?** (a, recommended) Nothing: turning is free, at a fixed rate. (b) A tiny amount of fuel per turn.
 2. **What does ↓ do?** (a, recommended) Fire in reverse: the engine pushes against the nose, so the player can slow down without turning around. (b) Nothing: only forward thrust; to slow down, turn around and burn.
