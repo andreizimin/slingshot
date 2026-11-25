@@ -27,4 +27,4 @@ Changes before CO-001 (the MVP, beta, getting-started tour and tutorial, tickets
 | [CO-002](CO-002-main-game.md) | The main game, first playable level ([ZZF-92](https://linear.app/zizify-workshop/issue/ZZF-92)) | Feature | Done (2026-11-24) | +~19 ~~10 | +30 ~~23 |
 | [CO-003](CO-003-onboarding-redesign.md) | Onboarding that stays out of the way, and a choice at the door ([ZZF-93](https://linear.app/zizify-workshop/issue/ZZF-93), [ZZF-90](https://linear.app/zizify-workshop/issue/ZZF-90)) | Feature | Done (2026-11-24) | +3 ~9 | +4 ~6 |
 | [CO-004](CO-004-trajectory-stays-fixed.md) | "The trajectory stays fixed" ([ZZF-91](https://linear.app/zizify-workshop/issue/ZZF-91)), delivered in CO-003 | Bug | Done (2026-11-24) | +1 ~2 | +0 ~1 |
-| [CO-005](CO-005-rotate-and-thrust.md) | Rotate and thrust: steering with two knobs ([ZZF-94](https://linear.app/zizify-workshop/issue/ZZF-94)) | Feature | Done (2026-11-24) | +3 ~16 | +4 ~21 |
+| [CO-005](CO-005-rotate-and-thrust.md) | Rotate and thrust: steering with two knobs ([ZZF-94](https://linear.app/zizify-workshop/issue/ZZF-94)) | Feature | Done (2026-11-24) | +3 ~16 | +3 ~21 |

@@ -277,13 +277,16 @@ export function planningBurn(state, dv) {
   return s;
 }
 
-// Turns the planned aim by dAngle radians (free; the nose turns to it when the plan is flown).
+// Turns the planned aim and the nose together by dAngle radians, at once: no time passes while
+// paused and turning is free, so the ship visibly rotates as the player plans.
 // @spec SIM-FUEL-008
 export function planAim(state, dAngle) {
   if (state.status !== 'flying' || !Number.isFinite(dAngle) || dAngle === 0) return state;
   const s = clone(state);
   s.aim = wrapAngle(s.aim + dAngle);
   if (Math.abs(s.aim) < 1e-15) s.aim = 0;
+  s.heading = wrapAngle(s.heading + dAngle);
+  if (Math.abs(s.heading) < 1e-15) s.heading = 0;
   return s;
 }
 

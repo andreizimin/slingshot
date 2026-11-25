@@ -521,8 +521,9 @@ function shipScreenPos(r) {
 function drawShip() {
   const r = shipRel();
   const [x, y] = shipScreenPos(r);
-  // Nose follows the ship's heading (world +y is screen up, so negate).
-  const angle = -state.heading;
+  // Nose follows the ship's heading (world +y is screen up, so negate). While paused, the planned
+  // state's heading: rotating while paused turns the ship at once (COCKPIT-CTL-008).
+  const angle = -(setting === 'paused' && plan ? plan.heading : state.heading);
 
   ctx.save();
   ctx.translate(x, y);
@@ -568,7 +569,7 @@ function drawShip() {
 }
 
 // Two speed arrows from the ship: toward the planet, and sideways (the part you control).
-// While planning, the planned aim and burn are shown (see drawShipGhost and the dashed burn arrow).
+// While planning, the planned burn is shown as a dashed arrow along the nose.
 // @spec COCKPIT-DRAW-008
 const TOWARD_PX_PER_KMS = 4;   // toward-planet speed is large; keep its arrow modest
 const SIDE_PX_PER_KMS = 14;    // sideways speed is the one you steer; make it big
@@ -611,12 +612,9 @@ function drawSpeedArrows() {
     pill('0.0 km/s sideways: decides your side', x, y - SIDE_MIN_PX - 18, '#fdba74', 'center');
   }
 
-  // @spec COCKPIT-DRAW-009 — the plan is shown only while paused: a ghost at the planned aim,
-  // and the planned burn as a dashed arrow along it (or against it, for reverse).
+  // @spec COCKPIT-DRAW-009 — the planned burn is shown only while paused, as a dashed arrow along
+  // the nose (or against it, for reverse).
   if (!plan || setting !== 'paused') return;
-  if (Math.abs(Math.atan2(Math.sin(plan.aim - state.heading), Math.cos(plan.aim - state.heading))) > Math.PI / 180) {
-    drawShipGhost(x, y, plan.aim);
-  }
   if (plan.planBurn !== 0) {
     const d = Math.sign(plan.planBurn);
     const ux = Math.cos(plan.aim) * d, uy = -Math.sin(plan.aim) * d;
@@ -627,25 +625,6 @@ function drawSpeedArrows() {
     pill(`${Math.abs(plan.planBurn).toFixed(1)} km/s ${d > 0 ? 'burn' : 'reverse'} (planned)`,
       x + ux * (blen + 16), y + uy * (blen + 16), '#fdba74', 'center');
   }
-}
-
-// A faint outline of the ship at the planned aim.
-// @spec COCKPIT-DRAW-013
-function drawShipGhost(x, y, aim) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-aim);
-  ctx.strokeStyle = 'rgba(253, 186, 116, 0.75)';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath();
-  ctx.moveTo(-14, -SHIP_HALF_H);
-  ctx.lineTo(8, -SHIP_HALF_H);
-  ctx.quadraticCurveTo(16, 0, 8, SHIP_HALF_H);
-  ctx.lineTo(-14, SHIP_HALF_H);
-  ctx.closePath();
-  ctx.stroke();
-  ctx.restore();
 }
 
 // Speed tuner: three sliders for steps per real second, applied live.

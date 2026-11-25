@@ -132,7 +132,7 @@ Taken as the default unless you say otherwise: the angle is absolute (the nose p
 |---|---|---|---|
 | HLD | 1 change | 1 change | Approach: aim (free) and burn forward or in reverse. |
 | LLDs | 9 sections across 5 nodes | 10 sections across 5 nodes | `flight-sim` (Fuel and thrust, Planned manoeuvres, State, Decisions ×2: Steering, and the focus-world row reworded), `cockpit` (Controls, Phones, Decisions), `tour` (Script, Input During the Tour, Decisions), `level` (Proving the Level), `analytics` (Events). |
-| Specs | +3 ~16 | +4 ~21 | Added SIM-FUEL-008 (`planAim`), 009 (turning is free), 010 (start facing world 0, aim = heading) and COCKPIT-DRAW-013 (planned-aim ghost). Revised SIM-FUEL-003 to 007; COCKPIT-CTL-001, 008, 009, DRAW-008, 009, HUD-005, MSG-001, MOB-002; TOUR-001, 003, 006, 012, 014; LEVEL-004, 006; ANA-002. |
+| Specs | +3 ~16 | +3 ~21 | Added SIM-FUEL-008 (`planAim`), 009 (turning is free) and 010 (start facing world 0, aim = heading). COCKPIT-DRAW-013 (a ghost outline at the planned aim) was added, then deleted after the dev check. Revised SIM-FUEL-003 to 007; COCKPIT-CTL-001, 008, 009, DRAW-008, 009, HUD-005, MSG-001, MOB-002; TOUR-001, 003, 006, 012, 014; LEVEL-004, 006; ANA-002. |
 | Tests | 4 files | 4 files | `sim`, `cockpit`, `tour`, `level`. |
 | Code | 5 files | 5 files | `physics.js`, `main.js`, `view.js`, `tour.js`, `index.html`. |
 
@@ -144,13 +144,16 @@ Taken as the default unless you say otherwise: the angle is absolute (the nose p
 - **Which side the tutorial flight took** is now worked out from the plan's push direction (`burn · sin(aim)`), since a plan no longer carries a side.
 - **Checked headlessly.** The browser extension was unavailable, so the tutorial was driven end to end in headless Chrome over the DevTools protocol at 1316×809: rotating is allowed on "Aim your ship" while ↑ does nothing, a burn plans on "Burn" (the fuel bar shows its cost), aiming down and burning on "Your turn" enables Next, and the flight ends in Boost! +7.4 km/s, with no page errors. Touch drags were not exercised and are for the dev check.
 
+- **Sent back from the dev check: rotation should work while paused.** At first a paused rotation moved only the plan's aim, shown as a ghost outline, and the nose turned when play resumed. The requester wanted the ship itself to rotate while paused. `planAim` now turns the aim and the nose together, at once (no time passes while paused, and turning is free), the ship is drawn at the planned heading, and the ghost outline and its spec were removed. A planned burn now fires as soon as play resumes, with no turn first.
+
 ### Commits
 
 | Hash | Message |
 |---|---|
 | `acafbf8` | CO-005: change order (ZZF-94) |
 | `bd2c122` | CO-005: approved (ZZF-94) |
-| see PR | CO-005: rotate and thrust, a nine-step tutorial that teaches it (ZZF-94) |
+| `45bf69e` | CO-005: rotate and thrust, a nine-step tutorial that teaches it (ZZF-94) |
+| see PR | CO-005: rotating while paused turns the ship (dev-check feedback) |
 
 ### Measurements
 

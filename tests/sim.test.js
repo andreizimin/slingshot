@@ -120,7 +120,7 @@ test('no thrust when fuel is empty', () => {
 
 // @spec SIM-FUEL-006
 test('the nose turns toward the aim at a limited rate, and the engine fires only once aligned, spooling up', () => {
-  let s = aimAt(sim.initialState(), Math.PI / 2); // facing +x, aim +y
+  let s = { ...sim.initialState(), aim: Math.PI / 2 }; // facing +x, aim +y
   s = sim.step(s, F);
   assert.equal(s.fuel, 10.0, 'no thrust while still turning');
   close(s.heading, sim.TURN_RATE, 1e-12);
@@ -177,11 +177,11 @@ test('planning a burn queues it without moving, spending, turning or advancing t
 });
 
 // @spec SIM-FUEL-008
-test('planning an aim turns it without spending, moving or turning the nose yet', () => {
+test('planning an aim turns the nose with it, at once, without spending, moving or advancing time', () => {
   const s0 = sim.initialState();
   const s1 = sim.planAim(s0, -0.5);
   close(s1.aim, -0.5, 1e-12);
-  assert.equal(s1.heading, s0.heading);
+  close(s1.heading, -0.5, 1e-12, 'the ship visibly rotates while paused');
   assert.equal(s1.fuel, 10.0);
   assert.equal(s1.t, 0);
   assert.deepEqual(s1.pos, s0.pos);
@@ -195,9 +195,9 @@ test('turning never spends fuel', () => {
   let s = sim.initialState();
   for (let i = 0; i < 500; i++) s = sim.step(s, { rotate: 1, thrust: 0 });
   assert.equal(s.fuel, 10.0);
-  s = aimAt(sim.initialState(), Math.PI);
+  s = { ...sim.initialState(), aim: Math.PI };
   for (let i = 0; i < 500; i++) s = sim.step(s, null);
-  assert.equal(s.fuel, 10.0, 'the nose turning to a planned aim is free');
+  assert.equal(s.fuel, 10.0, 'the nose turning toward its aim is free');
   close(Math.abs(s.heading), Math.PI, 1e-9);
 });
 

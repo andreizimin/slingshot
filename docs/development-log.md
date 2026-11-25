@@ -95,7 +95,7 @@ The ship is now flown the way a real one is: ← → (or a sideways drag) turn t
 | CO-001 | 82 | 126 |
 | CO-002 | 108 | 156 |
 | CO-003 | 112 | 160 |
-| CO-005 | 116 | 164 |
+| CO-005 | 116 | 163 |
 
 Counted from the repository at each milestone's commit on `main`.
 

@@ -85,9 +85,9 @@ Fuel is a delta-v budget: each firing step spends the delta-v it delivers (`thro
 
 ### Planned manoeuvres
 
-A plan is the state's **aim** plus a signed **queued burn**, `planBurn` (km/s; + forward, − reverse). `planAim(state, dAngle)` turns the aim by `dAngle` radians, and `planningBurn(state, dv)` adds a signed `dv` to `planBurn`, clamped to ±`fuel`. Neither advances time, moves the ship, or spends fuel, and opposite calls cancel, so planning is fully reversible: a player can turn the nose, burn, change their mind, undo, and owe nothing. Both have no effect unless `status` is `'flying'`.
+A plan is the state's **aim** plus a signed **queued burn**, `planBurn` (km/s; + forward, − reverse). `planAim(state, dAngle)` turns the aim and the nose together by `dAngle` radians, at once (no time passes while paused, and turning is free, so the ship visibly rotates as the player plans), and `planningBurn(state, dv)` adds a signed `dv` to `planBurn`, clamped to ±`fuel`. Neither advances time, moves the ship, or spends fuel, and opposite calls cancel, so planning is fully reversible: a player can turn the nose, burn, change their mind, undo, and owe nothing. Both have no effect unless `status` is `'flying'`.
 
-When no thrust is held and `planBurn` is non-zero, `step` flies it: the nose turns to the aim, the engine spools up, and it burns forward or in reverse until exactly `|planBurn|` has been delivered or fuel runs out, then cuts. Held thrust overrides the queued burn for as long as it is held. Because the prediction runs the same `step`, a queued manoeuvre appears in the prediction line with its turn and spool-up included.
+When no thrust is held and `planBurn` is non-zero, `step` flies it: the nose turns to the aim if it is not already there, the engine spools up, and it burns forward or in reverse until exactly `|planBurn|` has been delivered or fuel runs out, then cuts. Held thrust overrides the queued burn for as long as it is held. Because the prediction runs the same `step`, a queued manoeuvre appears in the prediction line with its turn and spool-up included.
 
 With these values, burning about 30% of the fuel early gives a close pass (under two planet radii) worth roughly +6.6 km/s behind or −10.8 km/s in front; burning more gives wider, gentler passes. Fuel spent buys safety; fuel saved buys drama.
 
