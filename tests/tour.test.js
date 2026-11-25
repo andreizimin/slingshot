@@ -5,12 +5,12 @@ import * as tour from '../site/cockpit/tour.js';
 import * as sim from '../site/sim/physics.js';
 
 const html = readFileSync(new URL('../site/index.html', import.meta.url), 'utf8');
-const paused = { planDv: 0, predictionEnding: 'crashed', setting: 'paused', status: 'flying', change: 0 };
+const paused = { planBurn: 0, predictionEnding: 'crashed', setting: 'paused', status: 'flying', change: 0 };
 const at = (id, extra = {}) => ({ active: true, index: tour.stepIndex(id), ...extra });
 
 // @spec TOUR-001
-test('the tour has the eight storyboard steps in order, opening on a close-up of the ship', () => {
-  assert.deepEqual(tour.STEPS.map((s) => s.id), ['ship', 'planet', 'speed', 'plan', 'try', 'fly', 'swing', 'result']);
+test('the tour has the nine storyboard steps in order, opening on a close-up of the ship', () => {
+  assert.deepEqual(tour.STEPS.map((s) => s.id), ['ship', 'planet', 'speed', 'aim', 'burn', 'try', 'fly', 'swing', 'result']);
   const first = tour.STEPS[0];
   assert.equal(first.focus, 'ship');
   assert.equal(first.zoom, 'close');
@@ -23,11 +23,18 @@ test('the tour has the eight storyboard steps in order, opening on a close-up of
   assert.match(speed.title, /Your speed/);
   assert.match(speed.text, /Grey/);
   assert.match(speed.text, /Orange/);
-  const plan = tour.STEPS.find((s) => s.id === 'plan');
-  assert.equal(plan.title, 'Fuel, and planning is free');
-  assert.equal(plan.target, 'hud-fuel');
-  assert.match(plan.text, /fuel/i);
-  assert.match(plan.text, /dashed line/);
+  const aim = tour.STEPS.find((s) => s.id === 'aim');
+  assert.equal(aim.title, 'Aim your ship');
+  assert.match(aim.text, /← →/);
+  assert.match(aim.text, /free/);
+  const burn = tour.STEPS.find((s) => s.id === 'burn');
+  assert.equal(burn.title, 'Burn');
+  assert.equal(burn.target, 'hud-fuel');
+  assert.match(burn.text, /↑/);
+  assert.match(burn.text, /↓/);
+  assert.match(burn.text, /fuel/i);
+  assert.match(burn.text, /dashed line/);
+  assert.match(tour.STEPS.find((s) => s.id === 'try').text, /aim/i);
   assert.equal(tour.STEPS.find((s) => s.id === 'fly').target, 'hud-time');
 });
 
@@ -49,17 +56,19 @@ test('Next moves through tap steps; "Your turn" accepts a plan that clears the p
   assert.match(tour.cardFor(t, paused).text, /BEHIND/);
   assert.match(tour.cardFor(t, paused).text, /FRONT/);
   assert.equal(tour.cardFor(t, paused).canAdvance, false, 'no plan yet');
-  const hits = tour.cardFor(t, { ...paused, planDv: -0.2, predictionEnding: 'crashed' });
+  const hits = tour.cardFor(t, { ...paused, planBurn: -0.2, predictionEnding: 'crashed' });
   assert.equal(hits.canAdvance, false);
   assert.match(hits.text, /still hits the planet/);
-  const behind = tour.cardFor(t, { ...paused, planDv: -2, predictionEnding: 'departed' });
+  const behind = tour.cardFor(t, { ...paused, planBurn: -2, predictionEnding: 'departed' });
   assert.equal(behind.canAdvance, true);
   assert.equal(behind.button, 'Next');
-  const front = tour.cardFor(t, { ...paused, planDv: 2, predictionEnding: 'departed' });
+  const front = tour.cardFor(t, { ...paused, planBurn: 2, predictionEnding: 'departed' });
   assert.equal(front.canAdvance, true, 'in front counts too');
-  assert.equal(tour.sideOf(-1), 'behind');
-  assert.equal(tour.sideOf(1), 'front');
-  assert.equal(tour.sideOf(0), null);
+  assert.equal(tour.sideOf(-Math.PI / 2, 3), 'behind', 'aimed down, burning forward');
+  assert.equal(tour.sideOf(Math.PI / 2, 3), 'front', 'aimed up, burning forward');
+  assert.equal(tour.sideOf(Math.PI / 2, -3), 'behind', 'aimed up, burning in reverse');
+  assert.equal(tour.sideOf(0, 3), null, 'straight at the planet: no side');
+  assert.equal(tour.sideOf(-Math.PI / 2, 0), null);
 });
 
 // @spec TOUR-003
@@ -78,7 +87,7 @@ test('"Fly!" moves on by itself when play starts, and the result needs the fligh
 
 // @spec TOUR-004
 test('cards show while paused; the result card waits for the flight to end', () => {
-  const plan = tour.current(at('plan'));
+  const plan = tour.current(at('burn'));
   assert.equal(tour.cardVisible(plan, paused), true);
   assert.equal(tour.cardVisible(plan, { ...paused, setting: 'normal' }), false);
   const result = tour.current(at('result'));
@@ -88,7 +97,7 @@ test('cards show while paused; the result card waits for the flight to end', () 
   assert.equal(tour.cardVisible(null, paused), false);
   const card = tour.cardFor(at('speed'), paused);
   assert.equal(card.n, 3);
-  assert.equal(card.of, 8);
+  assert.equal(card.of, 9);
   assert.match(html, /id="tour-card"[^>]*hidden/, 'card hidden until the tour shows it');
   assert.match(html, /id="tour-skip"/, 'skippable');
 });
@@ -138,23 +147,24 @@ test('a crash on the tour flight explains why and sends the player back to "Your
 test('during the tour only the input each step teaches is live', () => {
   const step = (id) => tour.current(at(id));
   for (const id of ['ship', 'planet', 'speed']) {
-    assert.equal(tour.inputAllowed(step(id), 'push'), false, `${id}: no steering yet`);
+    for (const kind of ['rotate', 'thrust', 'time']) assert.equal(tour.inputAllowed(step(id), kind), false, `${id}: no ${kind} yet`);
+  }
+  assert.equal(tour.inputAllowed(step('aim'), 'rotate'), true, 'aim: rotating is live');
+  assert.equal(tour.inputAllowed(step('aim'), 'thrust'), false, 'aim: not burning yet');
+  for (const id of ['burn', 'try']) {
+    assert.equal(tour.inputAllowed(step(id), 'rotate'), true, `${id}: rotating`);
+    assert.equal(tour.inputAllowed(step(id), 'thrust'), true, `${id}: burning (planning moves the line)`);
     assert.equal(tour.inputAllowed(step(id), 'time'), false, `${id}: no flying yet`);
   }
-  // "Fuel, and planning is free" says "drag to plan": the drag must move the line (ZZF-91).
-  assert.equal(tour.inputAllowed(step('plan'), 'push'), true, 'plan: steering is live');
-  assert.equal(tour.inputAllowed(step('plan'), 'time'), false, 'plan: no flying yet');
-  assert.equal(tour.inputAllowed(step('try'), 'push'), true);
-  assert.equal(tour.inputAllowed(step('try'), 'time'), false);
   assert.equal(tour.inputAllowed(step('fly'), 'time'), true);
-  assert.equal(tour.inputAllowed(null, 'push'), true, 'no tour: everything allowed');
+  assert.equal(tour.inputAllowed(null, 'rotate'), true, 'no tour: everything allowed');
 });
 
 // @spec TOUR-006
 test('R restarts normally, but on the tour only acts once a result card is up', () => {
   const step = (id) => tour.current(at(id));
   assert.equal(tour.resetAction(null, paused), 'restart');
-  assert.equal(tour.resetAction(step('plan'), paused), null, 'teaching steps ignore R');
+  assert.equal(tour.resetAction(step('burn'), paused), null, 'teaching steps ignore R');
   assert.equal(tour.resetAction(step('result'), { ...paused, setting: 'normal', status: 'flying' }), null, 'mid-flight: nothing');
   assert.equal(tour.resetAction(step('result'), { ...paused, status: 'crashed' }), 'retry');
   assert.equal(tour.resetAction(step('result'), { ...paused, status: 'departed', change: 5 }), 'ready');
@@ -176,10 +186,11 @@ test('pausing mid-way through the tour flight shows how to carry on', () => {
 // @spec TOUR-003
 test('the tour\'s "Your turn" is achievable in the real physics on both sides, with boost and brake results', () => {
   for (const [dir, sign] of [['down', 1], ['up', -1]]) {
-    let s = sim.planningBurn(sim.initialState(), dir, 3);
+    const angle = dir === 'down' ? -Math.PI / 2 : Math.PI / 2;
+    let s = sim.planningBurn(sim.planAim(sim.initialState(), angle), 3);
     const pred = sim.predict(s);
     assert.equal(pred.ending, 'departed', `${dir}: plan clears the planet`);
-    assert.equal(tour.cardFor(at('try'), { ...paused, planDv: s.planDv, predictionEnding: pred.ending }).canAdvance, true);
+    assert.equal(tour.cardFor(at('try'), { ...paused, planBurn: s.planBurn, predictionEnding: pred.ending }).canAdvance, true);
     for (let i = 0; i < 80000 && s.status === 'flying'; i++) s = sim.step(s, null);
     assert.equal(s.status, 'departed');
     assert.ok(sign * sim.speedChange(s) > 0.05, `${dir}: ${sign > 0 ? 'boost' : 'brake'} (${sim.speedChange(s)})`);
@@ -206,7 +217,7 @@ test('mid-swing checkpoint: fires once, just after closest approach on a close p
 
 // @spec TOUR-011
 test('in the real physics, the checkpoint fires mid-swing close to the planet', () => {
-  let s = sim.planningBurn(sim.initialState(), 'down', 3);
+  let s = sim.planningBurn(sim.planAim(sim.initialState(), -Math.PI / 2), 3);
   const t = at('swing');
   let fired = null;
   for (let i = 0; i < 60000 && s.status === 'flying'; i++) {
@@ -223,8 +234,8 @@ test('in the real physics, the checkpoint fires mid-swing close to the planet', 
 // @spec TOUR-012
 test('Back goes one step back on every step up to "Fly!", never during or after the flight', () => {
   assert.equal(tour.canGoBack(tour.start()), false, 'nothing before step 1');
-  const back = tour.prev(at('plan'));
-  assert.equal(tour.current(back).id, 'speed');
+  const back = tour.prev(at('burn'));
+  assert.equal(tour.current(back).id, 'aim');
   assert.equal(tour.current(tour.prev(at('fly'))).id, 'try');
   assert.equal(tour.canGoBack(at('swing')), false);
   assert.equal(tour.canGoBack(at('result')), false);

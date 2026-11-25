@@ -6,6 +6,15 @@ const close = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''
 const rel = (s) => sim.planetRelativePosition(s);
 const dist = (s) => Math.hypot(rel(s).x, rel(s).y);
 
+// Inputs: forward / reverse thrust, and a slow clockwise turn while burning forward.
+const F = { rotate: 0, thrust: 1 };
+const BK = { rotate: 0, thrust: -1 };
+const CW_F = { rotate: -1, thrust: 1 };
+// Aim at an absolute angle (free), then queue a forward burn of dv.
+const aimAt = (s, angle) => sim.planAim(s, angle - s.aim);
+const plan = (s, angle, dv) => sim.planningBurn(aimAt(s, angle), dv);
+const behind = (s, dv) => plan(s, -Math.PI / 2, dv); // aim down, burn forward: passes behind the planet
+
 function coast(s, max = 200000) {
   for (let i = 0; i < max && s.status === 'flying'; i++) s = sim.step(s, null);
   return s;
@@ -47,7 +56,7 @@ test('initial state: 4e6 km sunward, v_inf 10 km/s, full fuel', () => {
 // @spec SIM-STEP-001
 test('step advances one DT and stores gravity only', () => {
   const s0 = sim.initialState();
-  const s1 = sim.step(s0, 'up');
+  const s1 = sim.step(s0, F);
   assert.equal(s1.t, 30);
   assert.equal(s1.steps, 1);
   assert.deepEqual(s1.grav, sim.gravity(s1.pos.x, s1.pos.y, 30));
@@ -57,7 +66,7 @@ test('step advances one DT and stores gravity only', () => {
 test('step does not mutate its input', () => {
   const s0 = sim.initialState();
   const copy = structuredClone(s0);
-  sim.step(s0, 'down');
+  sim.step(s0, BK);
   assert.deepEqual(s0, copy);
 });
 
@@ -65,7 +74,7 @@ test('step does not mutate its input', () => {
 test('crashed and departed states are frozen', () => {
   for (const status of ['crashed', 'departed']) {
     const s = { ...sim.initialState(), status };
-    assert.deepEqual(sim.step(s, 'up'), s);
+    assert.deepEqual(sim.step(s, F), s);
   }
 });
 
@@ -78,22 +87,23 @@ test('closest tracks minimum distance', () => {
 });
 
 // A state already facing `angle` with the engine at full throttle.
-const spooled = (angle, extra = {}) => ({ ...sim.initialState(), heading: angle, throttle: 1, ...extra });
+const spooled = (angle, extra = {}) => ({ ...sim.initialState(), heading: angle, aim: angle, throttle: 1, ...extra });
 
 // @spec SIM-FUEL-001
 test('full-throttle thrust spends THRUST_ACCEL*DT fuel and pushes along the nose', () => {
   const up0 = spooled(Math.PI / 2);
-  const up = sim.step(up0, 'up');
+  const up = sim.step(up0, F);
   close(up.fuel, 10.0 - 5e-5 * 30, 1e-12);
   close(up.vel.y - sim.step(up0, null).vel.y, 5e-5 * 30, 1e-9);
-  const left0 = spooled(Math.PI);
-  assert.deepEqual(sim.step(left0, 'left').vel, sim.step(left0, null).vel, 'no thrust toward/away from the planet');
+  const back = sim.step(up0, BK);
+  close(back.vel.y - sim.step(up0, null).vel.y, -5e-5 * 30, 1e-9, 'reverse pushes against the nose');
+  close(back.fuel, 10.0 - 5e-5 * 30, 1e-12);
 });
 
 // @spec SIM-FUEL-002
 test('last partial burn empties fuel exactly', () => {
   const s0 = spooled(-Math.PI / 2, { fuel: 0.0005 });
-  const s1 = sim.step(s0, 'down');
+  const s1 = sim.step(s0, F);
   assert.equal(s1.fuel, 0);
   close(s1.vel.y - sim.step(s0, null).vel.y, -0.0005, 1e-9);
 });
@@ -101,7 +111,7 @@ test('last partial burn empties fuel exactly', () => {
 // @spec SIM-FUEL-003
 test('no thrust when fuel is empty', () => {
   const s0 = spooled(Math.PI / 2, { fuel: 0 });
-  const a = sim.step(s0, 'up');
+  const a = sim.step(s0, F);
   const b = sim.step(s0, null);
   assert.deepEqual(a.vel, b.vel);
   assert.equal(a.fuel, 0);
@@ -109,58 +119,95 @@ test('no thrust when fuel is empty', () => {
 });
 
 // @spec SIM-FUEL-006
-test('ship turns at a limited rate and spools up before full thrust', () => {
-  let s = sim.initialState(); // facing +x
-  s = sim.step(s, 'up');
+test('the nose turns toward the aim at a limited rate, and the engine fires only once aligned, spooling up', () => {
+  let s = aimAt(sim.initialState(), Math.PI / 2); // facing +x, aim +y
+  s = sim.step(s, F);
   assert.equal(s.fuel, 10.0, 'no thrust while still turning');
   close(s.heading, sim.TURN_RATE, 1e-12);
   let steps = 1;
-  while (s.fuel === 10.0 && steps < 1000) { s = sim.step(s, 'up'); steps++; }
+  while (s.fuel === 10.0 && steps < 1000) { s = sim.step(s, F); steps++; }
   const minTurn = Math.ceil((Math.PI / 2 - sim.ALIGN_TOLERANCE) / sim.TURN_RATE);
   assert.ok(steps >= minTurn, `fired after ${steps} steps, expected at least ${minTurn}`);
   close(s.throttle, 1 / sim.SPOOL_STEPS, 1e-12);
-  for (let i = 0; i < sim.SPOOL_STEPS + 5; i++) s = sim.step(s, 'up');
+  for (let i = 0; i < sim.SPOOL_STEPS + 5; i++) s = sim.step(s, F);
   assert.equal(s.throttle, 1);
   s = sim.step(s, null);
-  assert.equal(s.throttle, 0, 'engine cuts when the push stops');
+  assert.equal(s.throttle, 0, 'engine cuts when thrust stops');
+  const turned = sim.step(sim.initialState(), { rotate: 1, thrust: 0 });
+  close(turned.aim, sim.TURN_RATE, 1e-12, 'held rotate turns the aim');
+  close(turned.heading, sim.TURN_RATE, 1e-12, 'and the nose follows');
 });
 
 // @spec SIM-FUEL-007
-test('a queued manoeuvre is flown later and delivers exactly the planned delta-v', () => {
-  const start = sim.initialState();
-  let s = sim.planningBurn(start, 'down', 1.0);
+test('a queued burn is flown later along the aim and delivers exactly the planned delta-v', () => {
+  let s = behind(sim.initialState(), 1.0);
   assert.equal(s.fuel, 10.0, 'planning spends nothing');
-  for (let i = 0; i < 20000 && s.planDv !== 0; i++) s = sim.step(s, null);
-  assert.equal(s.planDv, 0);
+  const v0 = s.vel.y;
+  for (let i = 0; i < 20000 && s.planBurn !== 0; i++) s = sim.step(s, null);
+  assert.equal(s.planBurn, 0);
   close(s.fuel, 9.0, 1e-9);
   assert.equal(s.throttle, 0);
+  close(s.heading, -Math.PI / 2, 1e-9, 'flown pointing down');
 });
 
 // @spec SIM-FUEL-004
-test('unknown thrust direction is ignored', () => {
+test('unknown input values count as nothing', () => {
   const s0 = sim.initialState();
-  assert.deepEqual(sim.step(s0, 'sideways'), sim.step(s0, null));
+  assert.deepEqual(sim.step(s0, 'up'), sim.step(s0, null));
   assert.deepEqual(sim.step(s0, 'toString'), sim.step(s0, null));
+  assert.deepEqual(sim.step(s0, { rotate: 'left', thrust: 2 }), sim.step(s0, null));
 });
 
 // @spec SIM-FUEL-005
-test('planning burn queues a manoeuvre without moving, spending, or advancing time', () => {
+test('planning a burn queues it without moving, spending, turning or advancing time', () => {
   const s0 = sim.initialState();
-  const s1 = sim.planningBurn(s0, 'down', 0.4);
-  close(s1.planDv, -0.4, 1e-12);
+  const s1 = sim.planningBurn(s0, 0.4);
+  close(s1.planBurn, 0.4, 1e-12);
   assert.deepEqual(s1.vel, s0.vel);
   assert.equal(s1.fuel, 10.0);
   assert.deepEqual(s1.pos, s0.pos);
   assert.equal(s1.t, 0);
-  assert.equal(s0.planDv, 0, 'input untouched');
-  const back = sim.planningBurn(s1, 'up', 0.4);
-  assert.equal(back.planDv, 0, 'reversible: up cancels down');
-  assert.deepEqual(sim.planningBurn(s1, 'right', 0.3), s1, 'only sideways plans');
-  const capped = sim.planningBurn({ ...s0, fuel: 0.1 }, 'up', 1);
-  close(capped.planDv, 0.1, 1e-12);
-  assert.deepEqual(sim.planningBurn(s0, 'sideways', 1), s0);
+  assert.equal(s1.aim, s0.aim);
+  assert.equal(s0.planBurn, 0, 'input untouched');
+  assert.equal(sim.planningBurn(s1, -0.4).planBurn, 0, 'reversible');
+  close(sim.planningBurn(s0, -0.7).planBurn, -0.7, 1e-12, 'a reverse burn');
+  close(sim.planningBurn({ ...s0, fuel: 0.1 }, 1).planBurn, 0.1, 1e-12, 'clamped to fuel');
   const crashed = { ...s0, status: 'crashed' };
-  assert.deepEqual(sim.planningBurn(crashed, 'up', 1), crashed);
+  assert.deepEqual(sim.planningBurn(crashed, 1), crashed);
+});
+
+// @spec SIM-FUEL-008
+test('planning an aim turns it without spending, moving or turning the nose yet', () => {
+  const s0 = sim.initialState();
+  const s1 = sim.planAim(s0, -0.5);
+  close(s1.aim, -0.5, 1e-12);
+  assert.equal(s1.heading, s0.heading);
+  assert.equal(s1.fuel, 10.0);
+  assert.equal(s1.t, 0);
+  assert.deepEqual(s1.pos, s0.pos);
+  close(sim.planAim(s1, 0.5).aim, 0, 1e-12, 'reversible');
+  const crashed = { ...s0, status: 'crashed' };
+  assert.deepEqual(sim.planAim(crashed, 1), crashed);
+});
+
+// @spec SIM-FUEL-009
+test('turning never spends fuel', () => {
+  let s = sim.initialState();
+  for (let i = 0; i < 500; i++) s = sim.step(s, { rotate: 1, thrust: 0 });
+  assert.equal(s.fuel, 10.0);
+  s = aimAt(sim.initialState(), Math.PI);
+  for (let i = 0; i < 500; i++) s = sim.step(s, null);
+  assert.equal(s.fuel, 10.0, 'the nose turning to a planned aim is free');
+  close(Math.abs(s.heading), Math.PI, 1e-9);
+});
+
+// @spec SIM-FUEL-010
+test('the ship starts facing world 0, aimed the same way, with nothing queued', () => {
+  const s = sim.initialState();
+  assert.equal(s.heading, 0);
+  assert.equal(s.aim, 0);
+  assert.equal(s.throttle, 0);
+  assert.equal(s.planBurn, 0);
 });
 
 // @spec SIM-READ-002
@@ -207,15 +254,15 @@ test('advance returns samples every 10th step', () => {
 // @spec SIM-TIME-005
 test('grouping steps into frames does not change the trajectory', () => {
   let a = sim.initialState();
-  for (let i = 0; i < 10; i++) a = sim.advance(a, 64, i < 3 ? 'down' : null).state;
+  for (let i = 0; i < 10; i++) a = sim.advance(a, 64, i < 3 ? CW_F : null).state;
   let b = sim.initialState();
-  for (let i = 0; i < 640; i++) b = sim.advance(b, 1, i < 192 ? 'down' : null).state;
+  for (let i = 0; i < 640; i++) b = sim.advance(b, 1, i < 192 ? CW_F : null).state;
   assert.deepEqual(a, b);
 });
 
 // @spec SIM-PRED-001, SIM-PRED-002, SIM-PRED-004
 test('prediction matches the live coasting trajectory and leaves state alone', () => {
-  const s0 = sim.advance(sim.initialState(), 50, 'down').state;
+  const s0 = sim.advance(sim.initialState(), 50, CW_F).state;
   const copy = structuredClone(s0);
   const pred = sim.predict(s0, 2000);
   assert.deepEqual(s0, copy);
@@ -278,7 +325,8 @@ test('flyby conserves planet-frame speed within 0.1%', () => {
 
 function burnHalfThenCoast(dir) {
   let s = sim.initialState();
-  while (s.fuel > sim.FUEL_DV / 2 + 1e-12) s = sim.step(s, dir);
+  s = aimAt(s, dir === 'down' ? -Math.PI / 2 : Math.PI / 2);
+  while (s.fuel > sim.FUEL_DV / 2 + 1e-12) s = sim.step(s, F);
   return coast(s);
 }
 
@@ -343,7 +391,7 @@ test('gravity is the sum of the inverse-square pulls of the star and the planet'
 // @spec SIM-END-002
 test('a flight departs only after a close pass, once back beyond the start distance', () => {
   // A close pass: plan a swing behind, fly it, and it ends as departed, far out.
-  let s = sim.planningBurn(sim.initialState(), 'down', 3);
+  let s = behind(sim.initialState(), 3);
   for (let i = 0; i < 80000 && s.status === 'flying'; i++) s = sim.step(s, null);
   assert.equal(s.status, 'departed');
   assert.ok(dist(s) > sim.START_DISTANCE);
@@ -416,7 +464,7 @@ test('gravity sums every world, and the star only when the scenario has one', ()
 test('a flight that has ended in any way is frozen', () => {
   for (const status of ['crashed', 'departed', 'arrived', 'lost']) {
     const s = { ...sim.initialState(), status };
-    assert.deepEqual(sim.step(s, 'up'), s, status);
+    assert.deepEqual(sim.step(s, F), s, status);
   }
 });
 
@@ -447,12 +495,11 @@ test('focus moves to another world only once it is 10% nearer than the current f
 });
 
 // @spec SIM-FUEL-006
-test('"up" is sideways relative to the focus world, not a fixed direction', () => {
-  // World straight above the ship: toward = +y, so "up" (90° CCW) is -x.
+test('thrust pushes along the nose, whichever world is near', () => {
   const scn = pond([drift('A', 0, 0, 0, 0)]);
-  const s0 = { ...sim.initialState(scn), pos: { x: 0, y: -4e6 }, vel: { x: 0, y: 10 }, heading: Math.PI, throttle: 1 };
+  const s0 = { ...sim.initialState(scn), pos: { x: 0, y: -4e6 }, vel: { x: 0, y: 10 }, heading: Math.PI, aim: Math.PI, throttle: 1 };
   const s = { ...s0, grav: sim.gravity(0, -4e6, 0, scn) };
-  const pushed = sim.step(s, 'up');
+  const pushed = sim.step(s, F);
   const coasted = sim.step(s, null);
   close(pushed.vel.x - coasted.vel.x, -5e-5 * 30, 1e-9);
   close(pushed.vel.y - coasted.vel.y, 0, 1e-9);
@@ -472,7 +519,7 @@ test('hitting any world is a crash', () => {
 test('departing is a flyby-rule ending only; the level rule never departs', () => {
   const levelEnd = { rule: 'level', destination: 1, catchRadius: 3e6, catchSpeed: 5, lostDistance: 1e9 };
   const scn = pond([drift('A', 0, 0, 0, 13), drift('B', 9e8, 9e8, 0, 0)], levelEnd);
-  let s = sim.planningBurn(sim.initialState(scn), 'down', 3);
+  let s = behind(sim.initialState(scn), 3);
   for (let i = 0; i < 60000 && s.status === 'flying'; i++) s = sim.step(s, null);
   assert.equal(s.status, 'flying', 'past the flyby and far out, still flying under the level rule');
   assert.ok(Math.hypot(s.pos.x - sim.worldPosition(scn, 0, s.t).x, s.pos.y - sim.worldPosition(scn, 0, s.t).y) > 4.0e6);
@@ -537,7 +584,7 @@ test('prediction uses the scenario horizon, counts from its own start, and ends 
   assert.ok(last.t % (20 * sim.DT) !== 0 || pred.points.length > 0, 'terminal point recorded');
   const scn = pond([drift('A', 0, 0, 0, 0)]);
   scn.predictSteps = 100;
-  const short = sim.predict({ ...sim.planningBurn(sim.initialState(scn), 'down', 9) });
+  const short = sim.predict({ ...behind(sim.initialState(scn), 9) });
   assert.equal(short.ending, 'horizon');
   assert.equal(short.points.length, 5);
 });
@@ -580,6 +627,6 @@ test('the tutorial is unchanged whether or not its scenario is passed', () => {
   const b = sim.initialState(sim.TUTORIAL);
   assert.deepEqual(a, b);
   let x = a, y = b;
-  for (let i = 0; i < 500; i++) { x = sim.step(x, i < 100 ? 'down' : null); y = sim.step(y, i < 100 ? 'down' : null); }
+  for (let i = 0; i < 500; i++) { x = sim.step(x, i < 100 ? CW_F : null); y = sim.step(y, i < 100 ? CW_F : null); }
   assert.deepEqual(x, y);
 });

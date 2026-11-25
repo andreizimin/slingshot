@@ -26,7 +26,7 @@ A **scenario** is plain data: an optional fixed star, a list of **worlds** (at l
 
 Worlds feel no gravity; they follow their prescribed motion exactly, which keeps every scenario reproducible. The ship feels the inverse-square pull of the star (if any) and of **every** world at once: there is no switching between "spheres of influence", so a flyby next to one world is still pulled, very slightly, by the others.
 
-The **focus world** is the world the ship is steering by. It starts as the world nearest the ship, and after each step it changes only when another world is at least 10% nearer than the current focus, so halfway between two worlds it does not flip back and forth. The state carries it (`focus`). Everything the player steers by is measured relative to it: the sideways axis, the two speed components, the planet-relative position and velocity. In the tutorial there is one world, so it is always the focus. In this document "the planet" means the focus world wherever a scenario has more than one.
+The **focus world** is the world the ship's speed arrows and the camera are measured against. It starts as the world nearest the ship, and after each step it changes only when another world is at least 10% nearer than the current focus, so halfway between two worlds it does not flip back and forth. The state carries it (`focus`). Everything the player steers by is measured relative to it: the sideways axis, the two speed components, the planet-relative position and velocity. In the tutorial there is one world, so it is always the focus. In this document "the planet" means the focus world wherever a scenario has more than one.
 
 The **end rule** decides how a flight ends besides crashing:
 
@@ -72,21 +72,22 @@ The level (`site/sim/levels.js`, owned by the `level` node) is a pond of three J
 
 - `THRUST_ACCEL` = 5e-5 km/s² at full throttle, along the ship's nose.
 - `FUEL_DV` = 10.0 km/s total delta-v budget, generous enough to recover from a mistake.
-- `TURN_RATE` = π/480 rad per step (a half-turn takes 4 sim hours, about 0.6 s at Normal).
+- `TURN_RATE` = π/480 rad per step (a half-turn takes 4 sim hours, about 0.6 s at Normal). Turning is free: it never spends fuel.
 - `SPOOL_STEPS` = 120 steps from engine start to full throttle (about 0.15 s at Normal).
-- `ALIGN_TOLERANCE` = 10°: the engine fires only when the nose is this close to the wanted direction.
+- `ALIGN_TOLERANCE` = 10°: the engine fires only when the nose is this close to the aim.
+- `PLAN_TURN_RATE` = π/2 rad per real second: how fast the aim turns while the player plans, paused.
 
-**Only sideways speed can be changed.** At every step the ship has two axes: *toward*, the unit vector from the ship to the focus world, and *sideways*, that vector turned 90° counter-clockwise (at the default start, sideways is world +y). A push `'up'` means +sideways and `'down'` means −sideways; `'left'`, `'right'` and anything else mean no push. The speed toward the planet is left entirely to gravity, which keeps the one control a kid has pointed at the one thing that decides boost or brake: which side of the planet they pass. `axes(state)` returns the two unit vectors, and `speedComponents(state)` splits the velocity relative to the focus world along them. When the focus changes between worlds, the sideways axis changes with it; a queued manoeuvre is a signed amount, so it keeps its sign and is flown along the new axis.
+**Aim, then burn.** The player has two controls. **Rotate** (`-1`, `0` or `+1`, counter-clockwise positive) turns the ship's **aim**, an absolute direction in the world (0 = +x, π/2 = +y, screen up), by `TURN_RATE` per step while held. **Thrust** (`+1` forward, `−1` reverse, `0` none) fires the engine along the nose, or against it. A step's input is a command `{ rotate, thrust }`; `null` or anything else means no input. Rotating never spends fuel; only thrust does. Which side of a world the ship passes, the thing that decides boost or brake, now follows from where the player points the ship and how hard they burn. `axes(state)` still returns the unit vectors toward the focus world and sideways from it, and `speedComponents(state)` splits the velocity relative to the focus world along them: the cockpit draws those as the speed arrows, so the player can see which way a burn bends the pass.
 
-Steering takes time. The ship has a **heading** (where its nose points) and a **throttle** (0 to 1). When a push is wanted, the ship first turns toward it at `TURN_RATE`; once within `ALIGN_TOLERANCE`, the engine spools up by `1/SPOOL_STEPS` per step, and thrust is `throttle · THRUST_ACCEL` along the heading. When nothing is wanted, or the ship is still turning, the engine is off and throttle drops to 0 at once.
+Steering takes time. The ship has a **heading** (where its nose points), an **aim** (where the player wants it to point) and a **throttle** (0 to 1). Every step the heading turns toward the aim by at most `TURN_RATE`. When thrust is wanted (held, or a queued burn) and the heading is within `ALIGN_TOLERANCE` of the aim, the engine spools up by `1/SPOOL_STEPS` per step, and thrust is `throttle · THRUST_ACCEL` along the heading (forward) or against it (reverse). When no thrust is wanted, or the nose is still turning, the engine is off and throttle drops to 0 at once.
 
 Fuel is a delta-v budget: each firing step spends the delta-v it delivers (`throttle · THRUST_ACCEL · DT`). If a step would spend more than remains, its thrust is scaled down to use exactly what is left, and fuel is then exactly zero. Thrust has no effect when fuel is zero.
 
 ### Planned manoeuvres
 
-`planningBurn(state, thrustDir, dv)` adds `+dv` (`'up'`) or `−dv` (`'down'`) to a signed **queued sideways manoeuvre**, `planDv`, without advancing time, moving the ship, or spending fuel. The total is clamped to ±`fuel`. Opposite calls cancel, so planning is fully reversible: a player can drag up, change their mind, drag back, and owe nothing. It has no effect unless `status` is `'flying'` and the direction is `'up'` or `'down'`.
+A plan is the state's **aim** plus a signed **queued burn**, `planBurn` (km/s; + forward, − reverse). `planAim(state, dAngle)` turns the aim by `dAngle` radians, and `planningBurn(state, dv)` adds a signed `dv` to `planBurn`, clamped to ±`fuel`. Neither advances time, moves the ship, or spends fuel, and opposite calls cancel, so planning is fully reversible: a player can turn the nose, burn, change their mind, undo, and owe nothing. Both have no effect unless `status` is `'flying'`.
 
-When no direction is held and `planDv` is non-zero, `step` flies it: turn toward the sideways direction of its sign (recomputed each step from the current geometry), spool up, and burn until exactly `|planDv|` has been delivered or fuel runs out, then cut the engine. A held direction overrides the queued manoeuvre for as long as it is held. Because the prediction runs the same `step`, a queued manoeuvre appears in the prediction line with its turn and spool-up included.
+When no thrust is held and `planBurn` is non-zero, `step` flies it: the nose turns to the aim, the engine spools up, and it burns forward or in reverse until exactly `|planBurn|` has been delivered or fuel runs out, then cuts. Held thrust overrides the queued burn for as long as it is held. Because the prediction runs the same `step`, a queued manoeuvre appears in the prediction line with its turn and spool-up included.
 
 With these values, burning about 30% of the fuel early gives a close pass (under two planet radii) worth roughly +6.6 km/s behind or −10.8 km/s in front; burning more gives wider, gentler passes. Fuel spent buys safety; fuel saved buys drama.
 
@@ -96,7 +97,7 @@ The sim state is a plain object:
 
 ```js
 { t, steps, pos: {x, y}, vel: {x, y}, grav: {x, y}, fuel, status, closest, startSpeed,
-  heading, throttle, planDv, scenario }
+  heading, aim, throttle, planBurn, scenario }
 // status: 'flying' | 'crashed' | 'departed' (flyby rule) | 'arrived' | 'lost' (level rule)
 ```
 
@@ -107,7 +108,7 @@ The sim state is a plain object:
 - `startSpeed` is the speed at `t = 0` in the scenario's frame (the star's, or the pond's).
 - `scenario` is the scenario the state belongs to. It is shared, never copied or changed. `initialState(scenario)` defaults to the tutorial's.
 
-`step(state, thrustDir)` advances by exactly one `DT` using **velocity Verlet**, with thrust `T` held constant across the step:
+`step(state, input)` advances by exactly one `DT` using **velocity Verlet**, with thrust `T` held constant across the step:
 
 1. `pos += vel·DT + ½·(grav + T)·DT²`
 2. `t += DT`, `steps += 1`
@@ -117,7 +118,7 @@ The sim state is a plain object:
 
 `gravity(pos, t, scenario)` sums the inverse-square pull of the star (if any) at the origin and of every world at its prescribed position at time `t`.
 
-`thrustDir` is `'up'` (+sideways), `'down'` (−sideways) or anything else (no push).
+The input is a command `{ rotate, thrust }` (see *Fuel and thrust*); `null` means none.
 
 After each step:
 
@@ -141,7 +142,7 @@ Time settings are measured in **steps per real second**, not per rendered frame,
 
 `stepsForFrame(setting, elapsedSeconds, carry)` returns `{ steps, carry }`. It converts the real time since the last frame into a whole number of steps and carries the fractional remainder to the next frame. Elapsed time above 0.25 s (a background tab, a stall) is clamped to 0.25 s, so the game never jumps ahead after being hidden.
 
-`advance(state, steps, thrustDir)` runs `step` that many times and returns `{ state, samples }`, where `samples` holds the ship's position and the time at every step whose global `steps` count is a multiple of 10 (every 5 sim minutes), so the cockpit can draw the trail in any world's frame. The cockpit draws its trail from these samples.
+`advance(state, steps, input)` runs `step` that many times and returns `{ state, samples }`, where `samples` holds the ship's position and the time at every step whose global `steps` count is a multiple of 10 (every 5 sim minutes), so the cockpit can draw the trail in any world's frame. The cockpit draws its trail from these samples.
 
 `DT` is identical in every setting. A trajectory depends only on the total number of steps and the thrust applied at each, never on how the steps were grouped into frames.
 
@@ -193,9 +194,9 @@ These define "the physics works" for this slice:
 | Planning while paused | Queue a manoeuvre the ship flies on resume | Instant velocity change; disallow | Paused means mapping a course, not spending fuel. Flying the plan with real turning and spool-up keeps it physically honest, and the prediction shows exactly what will happen. |
 | Crash | Status flag at physical radius; sim freezes | Bounce; pass through | Honest and simple. The visual radius is never used. |
 | More than one world | Scenarios as data: worlds with prescribed motion, every world's gravity summed | Only the nearest world's gravity (patched conics); integrating the worlds too | Summing every pull is the real physics and has no seams that could look like bugs. Prescribed motion keeps the level reproducible, as the tutorial's prescribed orbit does. |
-| What the player steers by | The focus world: the nearest one | The destination; a world the player picks | The nearest world is the one whose flyby is happening; steering relative to a far world would make "sideways" meaningless. |
+| What the speed arrows measure against | The focus world: the nearest one | The destination; a world the player picks | The nearest world is the one whose flyby is happening; splitting speed relative to a far world would say nothing about the pass. |
 | "Caught" | Within the catch radius with a far speed under the catch speed | Bound to the world (negative energy); plain relative speed under a threshold | Being bound needs an orbit-insertion burn the gentle sideways thrust cannot give. Plain relative speed grows as the ship falls in, so "slow enough" would depend on where it is measured. The far speed is the honest, distance-independent measure. |
-| Steering | Player pushes sideways only (up or down, relative to the planet); the ship turns to face the push at a limited rate and spools up before thrusting | Four world directions; instant thrust in any direction; manual rotate-and-thrust | Sideways speed alone decides which side of the planet the ship passes, so one up/down control covers the whole decision. The turn and spool-up make steering feel like flying a real ship and reward planning early. |
+| Steering | Rotate and thrust: the player turns the aim for free and fires forward or in reverse along the nose; the nose turns at a limited rate and the engine spools up | Sideways pushes only (up or down relative to the planet); four world directions; instant thrust in any direction | Pointing and burning is how a real ship is flown, and a kid can see it: the ship is drawn pointing where it will push. Sideways-only was a single control, but it hid the ship's direction behind an axis that changed with the nearest planet. Free rotation keeps fuel the score: only what changes the ship's speed costs anything. Reverse thrust lets a player slow down without turning around; fuel is still too scarce to replace a braking flyby. |
 
 ## Open Questions & Future Decisions
 

@@ -115,9 +115,12 @@ function nearestWorld(scenario, pos, t) {
 }
 
 // @spec SIM-SCN-003, SIM-SCN-004, SIM-SCN-006
+// @spec SIM-FUEL-010
 export function initialState(scenario = TUTORIAL) {
   const pos = { ...scenario.ship.pos };
   const vel = { ...scenario.ship.vel };
+  const w0 = worldPosition(scenario, 0, 0);
+  const facing = Math.atan2(w0.y - pos.y, w0.x - pos.x);
   return {
     t: 0,
     steps: 0,
@@ -128,9 +131,10 @@ export function initialState(scenario = TUTORIAL) {
     status: 'flying',
     closest: distanceTo(scenario, 0, pos, 0),
     startSpeed: Math.hypot(vel.x, vel.y),
-    heading: 0,               // nose direction, radians; starts facing the planet (+x)
+    heading: facing,          // nose direction, radians; starts facing world 0
+    aim: facing,              // where the player wants the nose; the nose turns toward it
     throttle: 0,              // 0..1, spools up while firing
-    planDv: 0,                // queued sideways manoeuvre, signed km/s (+ = 'up' side)
+    planBurn: 0,              // queued burn, signed km/s (+ forward along the nose, − reverse)
     focus: nearestWorld(scenario, pos, 0), // the world the ship steers by
     crashedInto: null,        // index of the world hit, once crashed
     scenario,                 // shared, never copied or changed
@@ -145,8 +149,13 @@ const scenarioOf = (state) => state.scenario ?? TUTORIAL;
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 // Only sideways pushes exist: 'up' is +1 along the sideways axis, 'down' is −1.
-const SIDE_SIGN = { up: 1, down: -1 };
-const sideSign = (thrustDir) => (Object.prototype.hasOwnProperty.call(SIDE_SIGN, thrustDir) ? SIDE_SIGN[thrustDir] : 0);
+// The step input is a command { rotate, thrust }, each −1, 0 or +1; anything else counts as 0.
+// @spec SIM-FUEL-004
+const unit = (v) => (v === 1 || v === -1 ? v : 0);
+const inputOf = (input) => (input && typeof input === 'object'
+  ? { rotate: unit(input.rotate), thrust: unit(input.thrust) }
+  : { rotate: 0, thrust: 0 });
+export const PLAN_TURN_RATE = Math.PI / 2; // rad of planned aim per real second of holding while paused
 
 // Unit vectors at the ship: toward the planet, and sideways (90° counter-clockwise from it).
 // At the default start the planet is at +x from the ship, so sideways is +y (screen up).
@@ -171,34 +180,28 @@ export function speedComponents(state) {
 // Shared step arithmetic used by step, advance and predict. Mutates s.
 // Returns true if thrust was applied.
 // @spec SIM-FUEL-006, SIM-FUEL-007
-function stepInPlace(s, thrustDir) {
+function stepInPlace(s, input) {
   if (s.status !== 'flying') return false;
 
-  // Sideways push wanted: a held direction, else a queued manoeuvre.
-  const manualSign = sideSign(thrustDir);
-  const executingBurn = manualSign === 0 && s.planDv !== 0;
-  const sign = manualSign || (executingBurn ? Math.sign(s.planDv) : 0);
-  let want = null;
-  if (sign !== 0) {
-    const { side } = axes(s);
-    want = [side.x * sign, side.y * sign];
-  }
+  // Rotate: turn the aim (free), then the nose toward the aim at a limited rate (also free).
+  // @spec SIM-FUEL-009
+  const { rotate, thrust } = inputOf(input);
+  if (rotate !== 0) s.aim = wrapAngle(s.aim + rotate * TURN_RATE);
+  const diff = wrapAngle(s.aim - s.heading);
+  s.heading = wrapAngle(s.heading + Math.max(-TURN_RATE, Math.min(TURN_RATE, diff)));
 
-  // Turn toward it at a limited rate, then spool the engine up once aligned.
-  let firing = false;
-  if (want) {
-    const target = Math.atan2(want[1], want[0]);
-    const diff = wrapAngle(target - s.heading);
-    s.heading = wrapAngle(s.heading + Math.max(-TURN_RATE, Math.min(TURN_RATE, diff)));
-    firing = Math.abs(wrapAngle(target - s.heading)) < ALIGN_TOLERANCE && s.fuel > 0;
-  }
+  // Thrust wanted: held, else a queued burn. It fires only once the nose is on the aim.
+  const executingBurn = thrust === 0 && s.planBurn !== 0;
+  const sign = thrust || (executingBurn ? Math.sign(s.planBurn) : 0);
+  const aligned = Math.abs(wrapAngle(s.aim - s.heading)) < ALIGN_TOLERANCE;
+  const firing = sign !== 0 && aligned && s.fuel > 0;
   s.throttle = firing ? Math.min(1, s.throttle + 1 / SPOOL_STEPS) : 0;
 
   let tx = 0;
   let ty = 0;
   if (s.throttle > 0) {
     let spend = s.throttle * THRUST_ACCEL * DT;
-    if (executingBurn) spend = Math.min(spend, Math.abs(s.planDv));
+    if (executingBurn) spend = Math.min(spend, Math.abs(s.planBurn));
     if (spend >= s.fuel) {
       spend = s.fuel;
       s.fuel = 0;
@@ -206,10 +209,10 @@ function stepInPlace(s, thrustDir) {
       s.fuel -= spend;
     }
     if (executingBurn) {
-      s.planDv -= sign * spend;
-      if (Math.abs(s.planDv) <= 1e-12 || s.fuel === 0) { s.planDv = 0; s.throttle = 0; }
+      s.planBurn -= sign * spend;
+      if (Math.abs(s.planBurn) <= 1e-12 || s.fuel === 0) { s.planBurn = 0; s.throttle = 0; }
     }
-    const a = spend / DT;
+    const a = (sign * spend) / DT;
     tx = Math.cos(s.heading) * a;
     ty = Math.sin(s.heading) * a;
   }
@@ -256,34 +259,42 @@ function stepInPlace(s, thrustDir) {
 }
 
 // @spec SIM-STEP-001, SIM-STEP-003, SIM-STEP-004, SIM-FUEL-001, SIM-FUEL-002, SIM-FUEL-003, SIM-FUEL-004, SIM-END-001, SIM-END-002, SIM-END-004, SIM-END-005
-export function step(state, thrustDir) {
+export function step(state, input) {
   const s = clone(state);
-  stepInPlace(s, thrustDir);
+  stepInPlace(s, input);
   return s;
 }
 
-// Adjusts the queued sideways manoeuvre (no time passes, no fuel spent yet).
-// Fully reversible: pushing up then down by the same amount cancels out.
-// The ship flies the net plan later: turn, spool up, burn until delivered.
+// Adjusts the queued burn (no time passes, no fuel spent yet): + forward, − reverse.
+// Fully reversible: opposite calls cancel. The ship flies the net plan later.
 // @spec SIM-FUEL-005
-export function planningBurn(state, thrustDir, dv) {
-  const sign = sideSign(thrustDir);
-  if (state.status !== 'flying' || sign === 0 || !(dv > 0)) return state;
+export function planningBurn(state, dv) {
+  if (state.status !== 'flying' || !Number.isFinite(dv) || dv === 0) return state;
   const s = clone(state);
-  const next = s.planDv + sign * dv;
-  s.planDv = Math.max(-s.fuel, Math.min(s.fuel, next));
-  if (Math.abs(s.planDv) < 1e-12) s.planDv = 0;
+  const next = s.planBurn + dv;
+  s.planBurn = Math.max(-s.fuel, Math.min(s.fuel, next));
+  if (Math.abs(s.planBurn) < 1e-12) s.planBurn = 0;
+  return s;
+}
+
+// Turns the planned aim by dAngle radians (free; the nose turns to it when the plan is flown).
+// @spec SIM-FUEL-008
+export function planAim(state, dAngle) {
+  if (state.status !== 'flying' || !Number.isFinite(dAngle) || dAngle === 0) return state;
+  const s = clone(state);
+  s.aim = wrapAngle(s.aim + dAngle);
+  if (Math.abs(s.aim) < 1e-15) s.aim = 0;
   return s;
 }
 
 // @spec SIM-TIME-004, SIM-TIME-005
-export function advance(state, n, thrustDir) {
+export function advance(state, n, input) {
   const s = clone(state);
   const samples = [];
   let thrusted = false;
   for (let i = 0; i < n; i++) {
     if (s.status !== 'flying') break;
-    if (stepInPlace(s, thrustDir)) thrusted = true;
+    if (stepInPlace(s, input)) thrusted = true;
     if (s.steps % 10 === 0 || s.status !== 'flying') samples.push({ x: s.pos.x, y: s.pos.y, t: s.t });
   }
   return { state: s, samples, thrusted };

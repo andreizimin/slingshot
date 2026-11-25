@@ -25,15 +25,20 @@ export const STEPS = [
     text: 'This is how fast you are flying: the planet can push it up, or pull it down. Grey arrow: your speed toward the planet, which gravity controls. Orange arrow: your sideways speed, the one you steer.',
   },
   {
-    id: 'plan', focus: 'planet', target: 'hud-fuel', advance: 'tap',
-    title: 'Fuel, and planning is free',
-    text: 'Pushing sideways burns fuel, so a little early goes a long way. While paused, drag up or down (or press ↑ ↓) to plan: the dashed line shows exactly where you will go. Planning costs nothing until you fly.',
+    id: 'aim', focus: 'planet', target: 'ship', advance: 'tap',
+    title: 'Aim your ship',
+    text: 'Press ← → (or drag sideways) to turn the nose. Try it now. Turning is free: it costs no fuel.',
+  },
+  {
+    id: 'burn', focus: 'planet', target: 'hud-fuel', advance: 'tap',
+    title: 'Burn',
+    text: '↑ (or drag up) fires the engine forward, the way the nose points. ↓ fires it backwards. Burning uses fuel, so a little early goes a long way. While paused, a burn is only a plan: the dashed line shows exactly where you will go, and nothing is spent until you fly.',
   },
   {
     id: 'try', focus: 'planet', target: 'ship', advance: 'planSide',
     title: 'Your turn: pick a side',
-    text: 'Drag DOWN to swing BEHIND the planet (that speeds you up), or UP to pass in FRONT of it (that slows you down). Stop when the dashed line clears the planet.',
-    waiting: 'Keep going: that path still hits the planet. Drag a little further.',
+    text: 'Aim the nose DOWN and burn forward to swing BEHIND the planet (that speeds you up), or aim UP and burn to pass in FRONT of it (that slows you down). Stop when the dashed line clears the planet.',
+    waiting: 'Keep going: that path still hits the planet. Burn a little more, or aim further down or up.',
   },
   {
     id: 'fly', focus: 'planet', target: 'hud-time', advance: 'running',
@@ -79,12 +84,12 @@ export function cardStrip(W, timeTop) {
 export const start = () => ({ active: true, index: 0 });
 export const current = (tour) => (tour?.active ? STEPS[tour.index] : null);
 
-// Is the step's "move on" condition met right now? ctx: { planDv, predictionEnding, setting, status }.
+// Is the step's "move on" condition met right now? ctx: { planBurn, predictionEnding, setting, status }.
 // @spec TOUR-003
 export function conditionMet(step, ctx) {
   switch (step.advance) {
     case 'tap': return true;
-    case 'planSide': return ctx.planDv !== 0 && ctx.predictionEnding === 'departed';
+    case 'planSide': return ctx.planBurn !== 0 && ctx.predictionEnding === 'departed';
     case 'running': return ctx.setting !== 'paused';
     case 'end': return ctx.status === 'departed';
     default: return false;
@@ -101,9 +106,14 @@ export function swingCheckpointDue(tour, ctx) {
   return ctx.closest < SWING_MAX_CLOSEST && ctx.distance > ctx.closest * 1.0001;
 }
 
-// Which side of the planet a plan takes: pushing down (negative) passes behind, up passes in front.
+// Which side of the planet a plan takes: a burn with a downward push passes behind (the tutorial's
+// planet moves up), an upward push in front. aim in radians, burn signed km/s (+ forward).
 // @spec TOUR-014
-export const sideOf = (planDv) => (planDv < 0 ? 'behind' : planDv > 0 ? 'front' : null);
+export function sideOf(aim, burn) {
+  const pushY = burn * Math.sin(aim);
+  if (Math.abs(pushY) < 1e-9) return null;
+  return pushY < 0 ? 'behind' : 'front';
+}
 
 // Steps that move on by themselves as soon as their condition holds (no Next press).
 export const autoAdvances = (step) => step.advance === 'running';
@@ -203,7 +213,7 @@ export function cardFor(tour, ctx) {
   let text = step.text;
   if (step.id === 'try' && tour.crashed) text = `Too close! ${text} A little wider this time.`;
   if (step.id === 'try' && tour.otherSide) text = `Now try the other side! ${text}`;
-  if (step.id === 'try' && !ok && ctx.planDv !== 0) text = step.waiting;
+  if (step.id === 'try' && !ok && ctx.planBurn !== 0) text = step.waiting;
   return {
     n, of, title: step.title, text,
     button: step.advance === 'tap' || step.advance === 'planSide' ? 'Next' : null,
@@ -218,8 +228,10 @@ export const signedKms = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)
 // @spec TOUR-006
 export function inputAllowed(step, kind) {
   if (!step) return true;
-  if (kind === 'push') return step.id === 'plan' || step.id === 'try' || step.id === 'fly';
+  if (kind === 'rotate') return ['aim', 'burn', 'try', 'fly'].includes(step.id);
+  if (kind === 'thrust') return ['burn', 'try', 'fly'].includes(step.id);
   if (kind === 'time') return step.id === 'fly' || step.id === 'swing' || step.id === 'result';
+  if (kind === 'rotate' || kind === 'thrust') return false;
   return true;
 }
 

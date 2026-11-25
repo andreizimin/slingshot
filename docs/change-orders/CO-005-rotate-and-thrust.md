@@ -3,10 +3,10 @@
 | | |
 |---|---|
 | Type | Feature |
-| Status | Approved |
+| Status | Done |
 | Requested | 2026-11-24 |
 | Approved | 2026-11-24 |
-| Completed | |
+| Completed | 2026-11-24 |
 | Ticket | [ZZF-94](https://linear.app/zizify-workshop/issue/ZZF-94) |
 
 ## Request
@@ -126,4 +126,37 @@ Taken as the default unless you say otherwise: the angle is absolute (the nose p
 
 ## Outcome
 
-Filled in after the change is complete.
+### Predicted vs Actual
+
+| Level | Predicted | Actual | Notes |
+|---|---|---|---|
+| HLD | 1 change | 1 change | Approach: aim (free) and burn forward or in reverse. |
+| LLDs | 9 sections across 5 nodes | 10 sections across 5 nodes | `flight-sim` (Fuel and thrust, Planned manoeuvres, State, Decisions ×2: Steering, and the focus-world row reworded), `cockpit` (Controls, Phones, Decisions), `tour` (Script, Input During the Tour, Decisions), `level` (Proving the Level), `analytics` (Events). |
+| Specs | +3 ~16 | +4 ~21 | Added SIM-FUEL-008 (`planAim`), 009 (turning is free), 010 (start facing world 0, aim = heading) and COCKPIT-DRAW-013 (planned-aim ghost). Revised SIM-FUEL-003 to 007; COCKPIT-CTL-001, 008, 009, DRAW-008, 009, HUD-005, MSG-001, MOB-002; TOUR-001, 003, 006, 012, 014; LEVEL-004, 006; ANA-002. |
+| Tests | 4 files | 4 files | `sim`, `cockpit`, `tour`, `level`. |
+| Code | 5 files | 5 files | `physics.js`, `main.js`, `view.js`, `tour.js`, `index.html`. |
+
+### Surprises
+
+- **The tutorial got a step, at the requester's ask.** Mid-way the requester asked for the tutorial to "properly explain the navigation". Aiming and burning became two steps ("Aim your ship", then "Burn"), each live as soon as it is explained: nine steps instead of eight.
+- **← → used to move through tutorial cards (TOUR-012).** They are the rotate keys now, so the arrows always steer and the cards move on Next (button, Enter, Space) and Back only. Not predicted.
+- **The level needed no change.** The designed route, re-expressed as "aim −90°, burn 3 km/s", still arrives with three stars, and the forgiving-correction test still finds two winning first burns with a correction aimed in one of eight directions. No world moved.
+- **Which side the tutorial flight took** is now worked out from the plan's push direction (`burn · sin(aim)`), since a plan no longer carries a side.
+- **Checked headlessly.** The browser extension was unavailable, so the tutorial was driven end to end in headless Chrome over the DevTools protocol at 1316×809: rotating is allowed on "Aim your ship" while ↑ does nothing, a burn plans on "Burn" (the fuel bar shows its cost), aiming down and burning on "Your turn" enables Next, and the flight ends in Boost! +7.4 km/s, with no page errors. Touch drags were not exercised and are for the dev check.
+
+### Commits
+
+| Hash | Message |
+|---|---|
+| `acafbf8` | CO-005: change order (ZZF-94) |
+| `bd2c122` | CO-005: approved (ZZF-94) |
+| see PR | CO-005: rotate and thrust, a nine-step tutorial that teaches it (ZZF-94) |
+
+### Measurements
+
+| | |
+|---|---|
+| Tests before → after | unit 112 → 116 |
+| Lines changed | +169 −109 (code), +169 −93 (tests), +64 −54 (docs, excluding change orders) |
+| Agent time | about 1.5 hours |
+| Deployed | dev on push; production on merge |

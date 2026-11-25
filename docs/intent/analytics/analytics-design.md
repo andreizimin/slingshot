@@ -28,7 +28,7 @@ The tracker reports a page view on load. The game has one page, so views are vis
 
 | Event | Fired when | Data |
 |---|---|---|
-| `slingshot_launch` | Play starts from the ready state (the first unpause of a flight) | `planned_dv`: km/s of sideways change planned before launch, one decimal |
+| `slingshot_launch` | Play starts from the ready state (the first unpause of a flight) | `planned_dv`: the planned burn before launch in km/s, one decimal (negative for reverse) |
 | `slingshot_flyby_result` | The sim status changes from `flying` to `departed` (tutorial) | `outcome` (`boost`, `brake` or `none`), `change` (km/s, one decimal), `fuel_left` (%) |
 | `slingshot_crash` | The sim status changes from `flying` to `crashed` (tutorial) | `fuel_left` (%) |
 | `slingshot_level_start` | The level starts or restarts | none |

@@ -52,11 +52,23 @@ test('radial remap puts the true surface on the drawn edge and barely moves far 
 });
 
 // @spec COCKPIT-CTL-009
-test('drag direction uses only the vertical part beyond the dead zone', () => {
-  assert.equal(view.dragDirection(0, -30), 'up');
-  assert.equal(view.dragDirection(0, 30), 'down');
-  assert.equal(view.dragDirection(200, 10), null, 'horizontal drags do nothing');
-  assert.equal(view.dragDirection(0, 24), null, 'inside dead zone');
+test('a drag steers: horizontal rotates, vertical burns, each beyond its own dead zone', () => {
+  assert.deepEqual(view.dragInput(-30, 0), { rotate: 1, thrust: 0 }, 'drag left: counter-clockwise');
+  assert.deepEqual(view.dragInput(30, 0), { rotate: -1, thrust: 0 });
+  assert.deepEqual(view.dragInput(0, -30), { rotate: 0, thrust: 1 }, 'drag up: forward');
+  assert.deepEqual(view.dragInput(0, 30), { rotate: 0, thrust: -1 }, 'drag down: reverse');
+  assert.deepEqual(view.dragInput(200, 10), { rotate: -1, thrust: 0 }, 'mostly sideways only rotates');
+  assert.deepEqual(view.dragInput(-40, -40), { rotate: 1, thrust: 1 }, 'both at once');
+  assert.equal(view.dragInput(10, 24), null, 'inside the dead zone');
+});
+
+// @spec COCKPIT-CTL-001
+test('held arrows: the latest of ← → rotates, the latest of ↑ ↓ burns, together', () => {
+  assert.equal(view.keyInput([]), null);
+  assert.deepEqual(view.keyInput(['ArrowLeft']), { rotate: 1, thrust: 0 });
+  assert.deepEqual(view.keyInput(['ArrowLeft', 'ArrowRight']), { rotate: -1, thrust: 0 }, 'latest wins');
+  assert.deepEqual(view.keyInput(['ArrowUp', 'ArrowLeft']), { rotate: 1, thrust: 1 });
+  assert.deepEqual(view.keyInput(['ArrowUp', 'ArrowDown']), { rotate: 0, thrust: -1 });
 });
 
 // @spec COCKPIT-HUD-003, COCKPIT-HUD-007
@@ -79,8 +91,8 @@ test('speed change readout: arrow, sign and tone', () => {
 test('messages for ready, crash and result, with touch wording', () => {
   const base = { status: 'flying', ready: false, coarse: false, change: 0, fuelFraction: 1 };
   assert.equal(view.messageFor(base), null);
-  assert.match(view.messageFor({ ...base, ready: true }).html, /press Space/);
-  assert.match(view.messageFor({ ...base, ready: true, coarse: true }).html, /tap Normal/);
+  assert.match(view.messageFor({ ...base, ready: true }).html, /Aim with ← →, burn with ↑ ↓, then press Space to go\./);
+  assert.match(view.messageFor({ ...base, ready: true, coarse: true }).html, /Drag sideways to aim, up or down to burn, then tap Normal to go\./);
   assert.match(view.messageFor({ ...base, status: 'crashed' }).html, /Bonk!/);
   const boost = view.messageFor({ ...base, status: 'departed', change: 6.6, fuelFraction: 0.78 }).html;
   assert.match(boost, /Boost! \+6\.6 km\/s/);
@@ -142,7 +154,7 @@ test('flight end events: one result or crash, counts only', () => {
 
 // @spec ANA-002
 test('launch event carries only the planned sideways change, rounded', () => {
-  assert.deepEqual(view.launchEvent(-1.26), { name: 'launch', data: { planned_dv: 1.3 } });
+  assert.deepEqual(view.launchEvent(-1.26), { name: 'launch', data: { planned_dv: -1.3 } }, 'reverse is negative');
   assert.deepEqual(view.launchEvent(0), { name: 'launch', data: { planned_dv: 0 } });
 });
 
