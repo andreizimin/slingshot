@@ -6,14 +6,15 @@ import * as level from '../site/cockpit/level.js';
 
 const close = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''} ${a} vs ${b}`);
 
-// Fly a level from its start: plans is a list of { t, dir, dv } queued when sim time reaches t.
+// Fly a level from its start: plans is a list of { t, aim, dv } (aim in radians, absolute; dv a
+// forward burn) queued when sim time reaches t.
 function fly(plans, maxSteps = 100000) {
   let s = sim.initialState(LEVEL_1);
   const queue = [...plans].sort((a, b) => a.t - b.t);
   for (let i = 0; i < maxSteps && s.status === 'flying'; i++) {
     while (queue.length && s.t >= queue[0].t) {
       const p = queue.shift();
-      s = sim.planningBurn(s, p.dir, p.dv);
+      s = sim.planningBurn(sim.planAim(s, p.aim - s.aim), p.dv);
     }
     s = sim.step(s, null);
   }
@@ -65,8 +66,8 @@ test('stars by fuel left: 6 km/s or more is three, 3 or more is two, any arrival
 });
 
 // @spec LEVEL-004
-test('the designed route: a 3 km/s push behind Home, then coasting, is caught by Haven with three stars', () => {
-  const s = fly([{ t: 0, dir: 'down', dv: 3 }]);
+test('the designed route: aim straight down, burn 3 km/s, then coast, is caught by Haven with three stars', () => {
+  const s = fly([{ t: 0, aim: -Math.PI / 2, dv: 3 }]);
   assert.equal(s.status, 'arrived', `ended ${s.status}`);
   assert.ok(s.fuel >= 6 - 1e-9, `fuel left ${s.fuel}`);
   assert.equal(level.starsFor(s.status, s.fuel), 3);
@@ -81,18 +82,23 @@ test('fuel alone cannot do it: Haven moves too differently from the ship', () =>
 });
 
 // @spec LEVEL-006
-test('the level is forgiving: other first pushes still win with one later correction', () => {
+test('the level is forgiving: other first burns still win with one later correction', () => {
   const winners = [];
   for (const push of [2, 4]) {
     let won = null;
-    for (let dv = -4; dv <= 4.001 && !won; dv += 0.5) {
-      if (dv === 0) continue;
-      const s = fly([{ t: 0, dir: 'down', dv: push }, { t: 1.5e5, dir: dv > 0 ? 'up' : 'down', dv: Math.abs(dv) }]);
-      if (s.status === 'arrived') won = { push, correction: dv, fuel: s.fuel };
+    for (const t of [1e5, 1.5e5, 2.5e5]) {
+      for (let k = 0; k < 8 && !won; k++) {
+        const aim = (k * Math.PI) / 4;
+        for (const dv of [0.5, 1, 1.5, 2, 3]) {
+          const s = fly([{ t: 0, aim: -Math.PI / 2, dv: push }, { t, aim, dv }]);
+          if (s.status === 'arrived') { won = { push, t, aim, dv, fuel: s.fuel }; break; }
+        }
+      }
+      if (won) break;
     }
     if (won) winners.push(won);
   }
-  assert.ok(winners.length >= 2, `winning first pushes: ${JSON.stringify(winners)}`);
+  assert.ok(winners.length >= 2, `winning first burns: ${JSON.stringify(winners)}`);
 });
 
 // @spec LEVEL-008

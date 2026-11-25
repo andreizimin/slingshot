@@ -65,10 +65,10 @@ A crash or getting lost earns no stars. Stars are decided from the exact fuel le
 
 Two properties are unit tests on the real level data and the real sim:
 
-1. **A chained route wins.** The designed route, a 3 km/s push behind Home queued while paused at the start (`planningBurn(initialState(level), 'down', 3)`) and then coasting with the real step, turning and spool-up included, is caught by Haven with at least 6 km/s of fuel left: three stars.
+1. **A chained route wins.** The designed route, aiming the nose straight down (−90°) and queuing a 3 km/s forward burn while paused at the start, which swings the ship behind Home, and then coasting with the real step, turning and spool-up included, is caught by Haven with at least 6 km/s of fuel left: three stars.
 2. **Fuel alone cannot.** Haven's drift differs from the ship's starting pond-frame velocity by about 23.6 km/s, more than the fuel budget plus the catch speed (15 km/s), so no use of fuel without help from the worlds can match Haven's motion.
 
-The design search also showed the level is forgiving: first pushes between 2 and 5 km/s behind Home can all still win with a later correction, earning fewer stars the less efficient they are, and no route that starts by passing in front of Home wins.
+The design search also showed the level is forgiving: first burns between 2 and 4 km/s aimed straight down can still win with one later correction burn, earning fewer stars the less efficient they are, and no route that starts by passing in front of Home wins.
 
 ## Analytics
 

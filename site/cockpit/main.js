@@ -153,7 +153,7 @@ function planetScreen() {
 
 // ---------- input ----------
 
-const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+const ARROWS = { ArrowUp: true, ArrowDown: true, ArrowLeft: true, ArrowRight: true };
 
 function setSetting(next) {
   // @spec TOUR-006 — during the tour, play starts only once the tour gets to "Fly!".
@@ -168,10 +168,10 @@ function setSetting(next) {
     // @spec COCKPIT-CTL-011 — resuming commits the planned course and charges its fuel.
     if (plan) { state = plan; plan = null; }
     // @spec TOUR-014 — remember which side the tutorial flight takes, for the checkpoint's words.
-    if (tours.current(tour)?.id === 'fly') tour = { ...tour, side: tours.sideOf(state.planDv) };
+    if (tours.current(tour)?.id === 'fly') tour = { ...tour, side: tours.sideOf(state.aim, state.planBurn) };
     // @spec ANA-002, LEVEL-012 — a flight is launched when play starts from the ready state.
     if (ready) {
-      const ev = inLevel() ? level.launchEvent() : view.launchEvent(state.planDv);
+      const ev = inLevel() ? level.launchEvent() : view.launchEvent(state.planBurn);
       track(ev.name, ev.data);
     }
     setting = next;
@@ -197,18 +197,10 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const step = tours.current(tour);
-  // @spec TOUR-012 — → and ← step through the tour (they never steer: only ↑ ↓ do).
-  if (step && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+  // @spec COCKPIT-CTL-001, TOUR-012 — the arrows always steer; they never move through tour cards.
+  if (ARROWS[e.key]) {
     e.preventDefault();
-    if (e.repeat) return;
-    if (e.key === 'ArrowRight') pressTourButton();
-    else if (tours.canGoBack(tour) && !tourEl.card.hidden) tour = tours.prev(tour);
-    return;
-  }
-  const dir = ARROWS[e.key];
-  if (dir) {
-    e.preventDefault();
-    if (!held.includes(dir)) held.push(dir);
+    if (!held.includes(e.key)) held.push(e.key);
     return;
   }
   // @spec TOUR-006 — Enter presses the tour card's button; Space does too on Next steps.
@@ -228,9 +220,8 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
-  const dir = ARROWS[e.key];
-  if (!dir) return;
-  const i = held.indexOf(dir);
+  if (!ARROWS[e.key]) return;
+  const i = held.indexOf(e.key);
   if (i >= 0) held.splice(i, 1);
 });
 
@@ -259,7 +250,7 @@ canvas.addEventListener('lostpointercapture', endDrag);
 
 function dragDir() {
   if (!drag) return null;
-  return view.dragDirection(drag.x - drag.x0, drag.y - drag.y0);
+  return view.dragInput(drag.x - drag.x0, drag.y - drag.y0);
 }
 
 // @spec COCKPIT-DRAW-007
@@ -274,7 +265,7 @@ function drawDragHint() {
 }
 
 // @spec COCKPIT-MOB-002
-if (COARSE) document.getElementById('help').textContent = 'Drag up/down: steer · buttons: speed';
+if (COARSE) document.getElementById('help').textContent = 'Drag sideways: aim · up/down: burn · buttons: speed';
 window.addEventListener('resize', resize);
 
 for (const b of el.buttons) {
@@ -530,8 +521,9 @@ function shipScreenPos(r) {
 function drawShip() {
   const r = shipRel();
   const [x, y] = shipScreenPos(r);
-  // Nose follows the ship's heading (world +y is screen up, so negate).
-  const angle = -state.heading;
+  // Nose follows the ship's heading (world +y is screen up, so negate). While paused, the planned
+  // state's heading: rotating while paused turns the ship at once (COCKPIT-CTL-008).
+  const angle = -(setting === 'paused' && plan ? plan.heading : state.heading);
 
   ctx.save();
   ctx.translate(x, y);
@@ -577,7 +569,7 @@ function drawShip() {
 }
 
 // Two speed arrows from the ship: toward the planet, and sideways (the part you control).
-// While planning, the sideways speed the plan will produce is shown dashed.
+// While planning, the planned burn is shown as a dashed arrow along the nose.
 // @spec COCKPIT-DRAW-008
 const TOWARD_PX_PER_KMS = 4;   // toward-planet speed is large; keep its arrow modest
 const SIDE_PX_PER_KMS = 14;    // sideways speed is the one you steer; make it big
@@ -605,33 +597,33 @@ function drawSpeedArrows() {
       (x0 + x1) / 2 - ty * 22, (y0 + y1) / 2 + tx * 22, '#cbd5e1', 'center');
   }
 
-  // Sideways arrow: thick orange, the one you control. A planned value is dashed on top,
-  // but only while paused and planning; once flying, only actual speeds are shown.
-  const planDv = plan ? plan.planDv : 0;
+  // Sideways arrow: thick orange, the speed that decides which side of the planet you pass.
   const sideLen = (v) => (Math.abs(v) < 0.05 ? 0 : Math.max(SIDE_MIN_PX, SHIP_CLEAR_PX + Math.abs(v) * SIDE_PX_PER_KMS));
-  const drawSide = (v, color, width, dashed) => {
-    const len = sideLen(v);
-    if (!len) return null;
-    const d = Math.sign(v);
+  const len = sideLen(c.side);
+  if (len) {
+    const d = Math.sign(c.side);
     const x0 = x + sx * d * SHIP_CLEAR_PX * 0.6, y0 = y + sy * d * SHIP_CLEAR_PX * 0.6;
     const x1 = x + sx * d * len, y1 = y + sy * d * len;
-    if (dashed) ctx.setLineDash([7, 6]);
-    arrow(x0, y0, x1, y1, color, width);
-    ctx.setLineDash([]);
-    return [x1, y1, d];
-  };
-  const now = drawSide(c.side, '#fb923c', 5, false);
-  const planned = planDv !== 0 ? drawSide(c.side + planDv, '#fdba74', 4, true) : null;
-  const labelAt = planned ?? now;
-  const value = planDv !== 0 ? c.side + planDv : c.side;
-  if (labelAt) {
-    const [lx, ly, d] = labelAt;
-    pill(`${Math.abs(value).toFixed(1)} km/s sideways${planDv !== 0 ? ' (planned)' : ''}`,
-      lx + sx * d * 14, ly + sy * d * 14, '#fdba74', 'center');
+    arrow(x0, y0, x1, y1, '#fb923c', 5);
+    pill(`${Math.abs(c.side).toFixed(1)} km/s sideways`, x1 + sx * d * 14, y1 + sy * d * 14, '#fdba74', 'center');
   } else if (tours.current(tour)?.ring === 'arrows') {
     // The tour explains the sideways arrow before there is any sideways speed: show where it lives.
     arrow(x, y - SHIP_CLEAR_PX * 0.6, x, y - SIDE_MIN_PX, 'rgba(251, 146, 60, 0.6)', 4);
-    pill('0.0 km/s sideways: yours to change', x, y - SIDE_MIN_PX - 18, '#fdba74', 'center');
+    pill('0.0 km/s sideways: decides your side', x, y - SIDE_MIN_PX - 18, '#fdba74', 'center');
+  }
+
+  // @spec COCKPIT-DRAW-009 — the planned burn is shown only while paused, as a dashed arrow along
+  // the nose (or against it, for reverse).
+  if (!plan || setting !== 'paused') return;
+  if (plan.planBurn !== 0) {
+    const d = Math.sign(plan.planBurn);
+    const ux = Math.cos(plan.aim) * d, uy = -Math.sin(plan.aim) * d;
+    const blen = Math.max(SIDE_MIN_PX, SHIP_CLEAR_PX + Math.abs(plan.planBurn) * SIDE_PX_PER_KMS);
+    ctx.setLineDash([7, 6]);
+    arrow(x + ux * SHIP_CLEAR_PX, y + uy * SHIP_CLEAR_PX, x + ux * blen, y + uy * blen, '#fdba74', 4);
+    ctx.setLineDash([]);
+    pill(`${Math.abs(plan.planBurn).toFixed(1)} km/s ${d > 0 ? 'burn' : 'reverse'} (planned)`,
+      x + ux * (blen + 16), y + uy * (blen + 16), '#fdba74', 'center');
   }
 }
 
@@ -661,7 +653,7 @@ function updateHud() {
   const ch = view.changeReadout(sim.speedChange(state));
   el.change.className = `change ${ch.tone}`;
   el.change.textContent = ch.text;
-  const bar = view.fuelBar(state.fuel, (plan ?? state).planDv, scenario.fuel);
+  const bar = view.fuelBar(state.fuel, Math.abs((plan ?? state).planBurn), scenario.fuel);
   el.fuel.style.width = `${(bar.solid * 100).toFixed(1)}%`;
   el.planned.style.width = `${(bar.striped * 100).toFixed(1)}%`;
   el.fuel.classList.toggle('low', bar.low);
@@ -780,7 +772,7 @@ function endTour(how) {
 
 function tourContext() {
   return {
-    planDv: (plan ?? state).planDv,
+    planBurn: (plan ?? state).planBurn,
     predictionEnding: prediction?.ending,
     setting,
     status: state.status,
@@ -915,8 +907,15 @@ function frame(now) {
   const elapsed = lastTime === null ? 0 : (now - lastTime) / 1000;
   lastTime = now;
 
-  const wanted = held.length ? held[held.length - 1] : dragDir();
-  const dir = !door && tours.inputAllowed(tours.current(tour), 'push') ? wanted : null;
+  // @spec COCKPIT-CTL-001, COCKPIT-CTL-009, TOUR-006 — keys win over a drag; the tour gates each control.
+  const wanted = held.length ? view.keyInput(held) : dragDir();
+  const tstep = tours.current(tour);
+  let dir = null;
+  if (wanted && !door) {
+    const rotate = tours.inputAllowed(tstep, 'rotate') ? wanted.rotate : 0;
+    const thrust = tours.inputAllowed(tstep, 'thrust') ? wanted.thrust : 0;
+    dir = rotate || thrust ? { rotate, thrust } : null;
+  }
   const r = sim.stepsForFrame(setting, elapsed, carry);
   carry = r.carry;
   thrustedThisFrame = false;
@@ -940,8 +939,10 @@ function frame(now) {
   } else if (setting === 'paused' && dir && state.status === 'flying') {
     // @spec COCKPIT-CTL-008 — pause-and-plan: shape a planned course; fuel is charged on resume.
     const base = plan ?? state;
-    const dv = sim.PLAN_RATE * Math.min(Math.max(elapsed, 0), 0.25);
-    const next = sim.planningBurn(base, dir, dv);
+    const dt = Math.min(Math.max(elapsed, 0), 0.25);
+    let next = base;
+    if (dir.rotate) next = sim.planAim(next, dir.rotate * sim.PLAN_TURN_RATE * dt);
+    if (dir.thrust) next = sim.planningBurn(next, dir.thrust * sim.PLAN_RATE * dt);
     if (next !== base) {
       plan = next;
       thrustedThisFrame = true;

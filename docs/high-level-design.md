@@ -12,7 +12,7 @@ A previous attempt that built from the full spec in one pass did not produce a w
 
 ### Current scope: the tutorial and the first level
 
-**The tutorial** is one star, one planet on a fixed circular orbit around it, and one ship. The player steers by changing only the ship's sideways speed, with a small fuel budget. Play alternates between two modes: **paused**, where the player plans a course and sees a prediction line of exactly where it leads, and **running**, where the ship flies it and the screen shows only what is actually happening. Passing behind the planet makes the speed climb, passing in front makes it fall.
+**The tutorial** is one star, one planet on a fixed circular orbit around it, and one ship. The player steers by aiming the ship (free) and firing its engine forward or in reverse, with a small fuel budget. Play alternates between two modes: **paused**, where the player plans a course and sees a prediction line of exactly where it leads, and **running**, where the ship flies it and the screen shows only what is actually happening. Passing behind the planet makes the speed climb, passing in front makes it fall.
 
 **The level** is the game: a pond of three worlds drifting at constant velocities, with no star. The ship cannot reach the destination world on fuel alone. It has to chain slingshots, a boost behind one world and a brake in front of another, and arrive slowly enough to be caught. Fuel left earns 1–3 stars. No map, missions or story yet.
 

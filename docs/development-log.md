@@ -78,6 +78,12 @@ The first feedback from players through the widget was about the tutorial: its c
 
 **Layout bugs are found by looking.** Every unit test passed while the docked card pushed the ship into the speed readout on a 950-pixel-wide screen. Playing each step at the reporters' screen sizes found it, and the feedback button covering the card on phones, within minutes.
 
+## 2026-11-24: CO-005, Aim and Burn
+
+The ship is now flown the way a real one is: ← → (or a sideways drag) turn the nose for free, and ↑ ↓ (or an up/down drag) fire the engine forward or in reverse. This replaced the original "push sideways only" control, which had been a deliberate simplification. The tutorial teaches aiming and burning on separate steps. See [CO-005](change-orders/CO-005-rotate-and-thrust.md).
+
+**A good level outlives its controls.** The level's proof tests were written against the physics, not the input, so re-expressing the winning route in the new controls was a one-line change and the level stayed winnable without moving a world.
+
 ## Numbers
 
 | Milestone | Tests | Specs |
@@ -89,6 +95,7 @@ The first feedback from players through the widget was about the tutorial: its c
 | CO-001 | 82 | 126 |
 | CO-002 | 108 | 156 |
 | CO-003 | 112 | 160 |
+| CO-005 | 116 | 163 |
 
 Counted from the repository at each milestone's commit on `main`.
 

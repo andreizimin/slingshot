@@ -73,24 +73,25 @@ The planet-frame speed is not displayed in this slice.
 
 | Input | Effect |
 |---|---|
-| ↑ / ↓ (held) | Push sideways: ↑ is the sideways direction 90° counter-clockwise from ship-toward-planet (screen up at the start), ↓ the opposite. ← and → have no effect, because only sideways speed can be changed. Held arrows form a stack: the most recently pressed one that is still held wins; releasing it falls back to the next one still held. |
+| ← / → (held) | Rotate the ship: ← turns the aim counter-clockwise, → clockwise, at the ship's turn rate. Turning is free. |
+| ↑ / ↓ (held) | Burn: ↑ fires the engine forward along the nose, ↓ in reverse. Burning spends fuel. Both controls can be held together. |
 | Space | Toggle pause. Unpausing returns to the setting that was active before the pause. |
 | 1 / 2 / 3 / 4 | Pause / Slow / Normal / Fast (2–4 also unpause) |
 | R | Reset to the initial scenario: new sim state, cleared trail, paused in the ready state, time setting kept |
 | Click a time button | Same as the matching key |
 
-**Drag to push (touch and mouse).** Pressing anywhere on the canvas with a finger or the mouse and dragging works like holding an arrow. Only the vertical part of the drag counts: once the pointer is more than 24 px above or below where it went down, it pushes up or down (sideways relative to the planet); horizontal movement is ignored. The push updates as the drag moves and stops when the pointer is released, cancelled, or the window loses focus. The canvas captures the pointer, so dragging off the edge keeps pushing. While a drag is active, a faint ring marks where it started and an arrow points from there to the pointer. Keyboard arrows, if also held, take priority. All of this uses Pointer Events, so one code path serves touch, mouse and pen.
+**Drag to steer (touch and mouse).** Pressing anywhere on the canvas with a finger or the mouse and dragging works like holding arrows. Once the pointer is more than 24 px from where it went down, the horizontal part of the drag rotates (left: counter-clockwise, right: clockwise) and the vertical part burns (up: forward, down: reverse); each part counts only beyond 24 px on its own axis, so a mostly-sideways drag only rotates. The input updates as the drag moves and stops when the pointer is released, cancelled, or the window loses focus. The canvas captures the pointer, so dragging off the edge keeps steering. While a drag is active, a faint ring marks where it started and an arrow points from there to the pointer. Keyboard arrows, if also held, take priority. All of this uses Pointer Events, so one code path serves touch, mouse and pen.
 
 Key handling is on the window, so no element needs focus. Arrow keys and Space call `preventDefault`, so the page never scrolls and a focused button is never activated by Space; time buttons also drop focus after a click. When the window loses focus, all held arrows are released.
 
-**Pause-and-plan.** While paused and the ship is flying, a held arrow or drag shapes a *planned course*: the cockpit keeps a separate planned state, applying `planningBurn` to it at `PLAN_RATE` (5/3 km/s per real second of holding), and draws the prediction from the plan. The live state is untouched, so no fuel is spent while planning. On resume, the planned state becomes the live state and its fuel is charged; reset discards it. The fuel bar shows the plan's cost as a striped section between the fuel left after the plan and the fuel held now. This is the intended way to pick a side from the ready state.
+**Pause-and-plan.** While paused and the ship is flying, held arrows or a drag shape a *planned course*: the cockpit keeps a separate planned state, turning its aim with `planAim` at `PLAN_TURN_RATE` (a quarter turn per real second) and adding to its burn with `planningBurn` at `PLAN_RATE` (5/3 km/s per real second), and draws the prediction from the plan. Rotating while paused turns the ship itself, at once, so the nose always shows where a burn will push; the planned burn is drawn as a dashed arrow along the nose, labelled "x.x km/s burn (planned)" (or "reverse"). The live state is untouched, so no fuel is spent while planning. On resume, the planned state becomes the live state and its fuel is charged; reset discards it. The fuel bar shows the plan's cost as a striped section between the fuel left after the plan and the fuel held now. This is the intended way to pick a side from the ready state.
 
 The page starts **paused** in the ready state, with Normal as the setting it resumes to.
 
 ## Phones and Touch Screens
 
 - The page disables browser panning and pinch-zoom over the game (`touch-action: none`), so drags steer the ship instead of scrolling the page.
-- On a touch-first device (`pointer: coarse`), the help line reads "Drag up/down: steer · buttons: speed", and the ready message reads "Drag up or down to pick a side, then tap Normal to go."
+- On a touch-first device (`pointer: coarse`), the help line reads "Drag sideways: aim · up/down: burn · buttons: speed", and the ready message reads "Drag sideways to aim, up or down to burn, then tap Normal to go."
 - On screens narrower than 600 px, the speed readout shrinks (40 px number), the fuel bar narrows to 110 px, the help line is hidden, and the time buttons shrink to fit four across while staying at least 44 px tall. Message cards fit within the screen width minus 32 px.
 
 ## Frame Loop
@@ -124,7 +125,7 @@ The approved visual reference is the cockpit mockup canvas "Slingshot cockpit mo
 | Result moment | Card on `departed` | Only the live change readout | Star-frame speed swings by tens of km/s during the pass; the card gives one clear answer. |
 | Planet drawn size | `max(true size, 24 px)` | Always inflated; always true | Inflated when far for visibility, true when close so the drawn edge never contradicts the crash radius. |
 | Ship drawn size | Constant 12 px | True scale | A true-scale ship is far below a pixel. A constant size keeps the ship comparable to the planet on screen. |
-| Thrust input | Sideways only: ↑/↓ keys or a vertical drag | Four arrow keys on world axes; rotate + thrust | Sideways speed is the one thing that decides which side of the planet the ship passes, so one up/down control covers the whole decision, on keyboard and touch alike. |
+| Thrust input | Rotate with ← → or a horizontal drag (free); burn forward or in reverse with ↑ ↓ or a vertical drag | Sideways pushes only; four arrow keys on world axes | Aim-then-burn is how a ship is really flown, and the ship is drawn pointing where it will push, so a kid can see what a burn will do. The speed arrows still show the sideways speed that decides which side of the planet the ship passes. |
 | Prediction visibility | Only while paused | Always on | Pause is for planning, play is for flying: while running, the screen shows only what is actually happening. |
 | Rendering | Canvas 2D, no libraries | WebGL; DOM/SVG | Enough for a handful of shapes and a few thousand line points per frame, with no dependencies. |
 | Readouts | HTML elements over the canvas | Drawn on canvas | Crisp text and clickable buttons for free. |

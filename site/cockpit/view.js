@@ -43,12 +43,27 @@ export function radialRemap(dx, dy, trueR, drawR) {
   return [dx * k, dy * k];
 }
 
-// Push direction from a drag: only the vertical part counts (sideways steering only).
-// dy is screen pixels, positive = down.
-// @spec COCKPIT-CTL-009
-export function dragDirection(dx, dy, deadzone = DRAG_DEADZONE) {
-  if (Math.abs(dy) <= deadzone) return null;
-  return dy < 0 ? 'up' : 'down';
+// @spec COCKPIT-CTL-009 — dx, dy in screen pixels (dy positive = down).
+// A drag as a step input: the horizontal part rotates (left = +1, counter-clockwise), the vertical
+// part burns (up = forward); each counts only beyond the dead zone on its own axis.
+export function dragInput(dx, dy, deadzone = DRAG_DEADZONE) {
+  const rotate = Math.abs(dx) > deadzone ? (dx < 0 ? 1 : -1) : 0;
+  const thrust = Math.abs(dy) > deadzone ? (dy < 0 ? 1 : -1) : 0;
+  return rotate || thrust ? { rotate, thrust } : null;
+}
+
+// Held arrow keys (in press order) as a step input: the latest of ← → rotates, the latest of ↑ ↓ burns.
+// @spec COCKPIT-CTL-001
+export function keyInput(held) {
+  let rotate = 0;
+  let thrust = 0;
+  for (const k of held) {
+    if (k === 'ArrowLeft') rotate = 1;
+    else if (k === 'ArrowRight') rotate = -1;
+    else if (k === 'ArrowUp') thrust = 1;
+    else if (k === 'ArrowDown') thrust = -1;
+  }
+  return rotate || thrust ? { rotate, thrust } : null;
 }
 
 // Fuel bar fractions: solid = fuel left after any queued plan; striped = fuel held now.
@@ -87,8 +102,8 @@ export function messageFor({ status, ready, coarse, change, fuelFraction }) {
     return {
       kind: 'ready',
       html: coarse
-        ? 'Drag up or down to pick a side, then tap Normal to go.'
-        : 'Push up or down (arrows or drag) to pick a side, then press Space to go.',
+        ? 'Drag sideways to aim, up or down to burn, then tap Normal to go.'
+        : 'Aim with ← →, burn with ↑ ↓, then press Space to go.',
     };
   }
   return null;
@@ -120,8 +135,8 @@ export const tunerEnabled = (search) => new URLSearchParams(search).has('tune');
 
 // Analytics event for starting a flight from the ready state (counts only).
 // @spec ANA-002
-export function launchEvent(planDv) {
-  return { name: 'launch', data: { planned_dv: Math.round(Math.abs(planDv) * 10) / 10 } };
+export function launchEvent(planBurn) {
+  return { name: 'launch', data: { planned_dv: Math.round(planBurn * 10) / 10 || 0 } };
 }
 
 // Which analytics events a sim status change should send (counts only).

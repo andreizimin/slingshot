@@ -12,9 +12,9 @@ Specs whose behaviour lives in the pure `site/sim/levels.js` and `site/cockpit/l
 
 ## Proving the level
 
-- [x] **LEVEL-004**: When the ship flies the level from its start with a 3 km/s `'down'` manoeuvre queued with `planningBurn` at `t = 0` (sideways relative to Home, per `SIM-FUEL-006`, and flown by the real step with turning and spool-up) and then steps with no direction held until the flight ends or 100,000 steps pass, the flight shall end `'arrived'` with at least 6 km/s of fuel left.
+- [x] **LEVEL-004**: When the ship flies the level from its start with the aim turned to −90° (straight down) by `planAim` and a 3 km/s forward burn queued by `planningBurn` at `t = 0` (flown by the real step with turning and spool-up), and then steps with no input until the flight ends or 100,000 steps pass, the flight shall end `'arrived'` with at least 6 km/s of fuel left.
 - [x] **LEVEL-005**: The magnitude of the vector difference between Haven's drift and the ship's starting velocity shall exceed the fuel budget plus the catch speed.
-- [x] **LEVEL-006**: At least two first pushes whose sizes differ by at least 1 km/s, each a `'down'` manoeuvre queued at `t = 0` and each followed by one queued correction at a time and size the test chooses, shall end the flight `'arrived'`.
+- [x] **LEVEL-006**: At least two first burns whose sizes differ by at least 1 km/s, each a forward burn aimed straight down queued at `t = 0`, and each followed by one queued correction (an aim and a burn) at a time and size the test chooses, shall end the flight `'arrived'`.
 
 ## Flow and score
 
